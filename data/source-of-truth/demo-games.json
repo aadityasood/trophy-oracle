@@ -1,0 +1,382 @@
+{
+  "schemaVersion": "2.0",
+  "notes": "Fictional demo data for Trophy Oracle v1. These records are designed to test the local AI pipeline and cross-platform achievements contract.",
+  "games": [
+    {
+      "id": "stellar-drift",
+      "title": "Stellar Drift",
+      "aliases": ["stellar drift", "drift"],
+      "sourceType": "fictional_demo",
+      "version": "2026.07.13",
+      "theme": {
+        "primary": "#7dd3fc",
+        "secondary": "#a78bfa",
+        "surfaceGlow": "#0ea5e9",
+        "mood": "neon orbital racing"
+      },
+      "summary": "A fast sci-fi racer with a linear campaign, several chapter-specific route achievements, and a late-game collectible cleanup.",
+      "achievementSets": [
+        {
+          "id": "stellar-drift-ps",
+          "platform": "playstation",
+          "edition": "Standard Edition",
+          "version": "2026.07.13",
+          "achievements": [
+            {
+              "id": "sd-ps-001",
+              "name": "First Burn",
+              "description": "Complete the opening tutorial race.",
+              "evidence": "Tutorial completion is mandatory before chapter selection unlocks.",
+              "reward": { "type": "trophy", "grade": "bronze" },
+              "tracking": { "mode": "binary" },
+              "labels": ["story"],
+              "expectedStage": "story",
+              "confidence": 0.99,
+              "prerequisites": [],
+              "crossPlatformGroupId": "group-first-burn"
+            },
+            {
+              "id": "sd-ps-002",
+              "name": "Orbit Breaker",
+              "description": "Finish Chapter 3 by taking the asteroid belt shortcut.",
+              "evidence": "The asteroid shortcut only appears during Chapter 3 and cannot be replayed after accepting the Chapter 4 sponsor contract.",
+              "reward": { "type": "trophy", "grade": "silver" },
+              "tracking": { "mode": "binary" },
+              "labels": ["missable", "point_of_no_return", "skill"],
+              "expectedStage": "missables",
+              "confidence": 0.95,
+              "prerequisites": ["sd-ps-001"],
+              "spoilerSafeHint": "A Chapter 3 route choice becomes unavailable after a later campaign commitment.",
+              "warning": "Take the asteroid belt route before signing the Chapter 4 sponsor contract.",
+              "crossPlatformGroupId": "group-orbit-breaker"
+            },
+            {
+              "id": "sd-ps-003",
+              "name": "Clean Lines",
+              "description": "Win any campaign race without touching a wall.",
+              "evidence": "Can be attempted on any replayable campaign race after the tutorial.",
+              "reward": { "type": "trophy", "grade": "silver" },
+              "tracking": { "mode": "binary" },
+              "labels": ["skill", "post_game"],
+              "expectedStage": "cleanup",
+              "confidence": 0.84,
+              "prerequisites": ["sd-ps-001"],
+              "estimatedEffort": "10-30 minutes depending on driving skill.",
+              "crossPlatformGroupId": "group-clean-lines"
+            },
+            {
+              "id": "sd-ps-004",
+              "name": "Signal Collector",
+              "description": "Recover all 48 lost telemetry beacons.",
+              "evidence": "Telemetry beacons remain accessible after the finale through free roam.",
+              "reward": { "type": "trophy", "grade": "gold" },
+              "tracking": { "mode": "counter", "unit": "beacons", "target": 48, "quickSteps": [1, 5] },
+              "labels": ["collectible", "grind", "post_game", "completion"],
+              "expectedStage": "cleanup",
+              "confidence": 0.98,
+              "prerequisites": [],
+              "estimatedEffort": "3-5 hours with a route map.",
+              "crossPlatformGroupId": "group-signal-collector"
+            },
+            {
+              "id": "sd-ps-005",
+              "name": "Platinum Vector",
+              "description": "Unlock every Stellar Drift trophy.",
+              "evidence": "Platinum unlocks after all non-platinum trophies are complete.",
+              "reward": { "type": "trophy", "grade": "platinum" },
+              "tracking": { "mode": "binary" },
+              "labels": ["completion"],
+              "expectedStage": "cleanup",
+              "confidence": 1.0,
+              "prerequisites": ["sd-ps-001", "sd-ps-002", "sd-ps-003", "sd-ps-004"]
+            }
+          ]
+        },
+        {
+          "id": "stellar-drift-steam",
+          "platform": "steam",
+          "edition": "Standard Edition",
+          "version": "2026.07.13",
+          "achievements": [
+            {
+              "id": "sd-steam-001",
+              "name": "First Burn",
+              "description": "Complete the opening tutorial race.",
+              "evidence": "Tutorial completion is mandatory before chapter selection unlocks.",
+              "reward": { "type": "achievement" },
+              "tracking": { "mode": "binary" },
+              "labels": ["story"],
+              "expectedStage": "story",
+              "confidence": 0.99,
+              "prerequisites": [],
+              "crossPlatformGroupId": "group-first-burn"
+            },
+            {
+              "id": "sd-steam-002",
+              "name": "Orbit Breaker",
+              "description": "Finish Chapter 3 by taking the asteroid belt shortcut.",
+              "evidence": "The asteroid shortcut only appears during Chapter 3 and cannot be replayed after accepting the Chapter 4 sponsor contract.",
+              "reward": { "type": "achievement" },
+              "tracking": { "mode": "binary" },
+              "labels": ["missable", "point_of_no_return", "skill"],
+              "expectedStage": "missables",
+              "confidence": 0.95,
+              "prerequisites": ["sd-steam-001"],
+              "spoilerSafeHint": "A Chapter 3 route choice becomes unavailable after a later campaign commitment.",
+              "warning": "Take the asteroid belt route before signing the Chapter 4 sponsor contract.",
+              "crossPlatformGroupId": "group-orbit-breaker"
+            },
+            {
+              "id": "sd-steam-003",
+              "name": "Clean Lines",
+              "description": "Win any campaign race without touching a wall.",
+              "evidence": "Can be attempted on any replayable campaign race after the tutorial.",
+              "reward": { "type": "achievement" },
+              "tracking": { "mode": "binary" },
+              "labels": ["skill", "post_game"],
+              "expectedStage": "cleanup",
+              "confidence": 0.84,
+              "prerequisites": ["sd-steam-001"],
+              "estimatedEffort": "10-30 minutes depending on driving skill.",
+              "crossPlatformGroupId": "group-clean-lines"
+            },
+            {
+              "id": "sd-steam-004",
+              "name": "Signal Collector",
+              "description": "Recover all 48 lost telemetry beacons.",
+              "evidence": "Telemetry beacons remain accessible after the finale through free roam.",
+              "reward": { "type": "achievement" },
+              "tracking": { "mode": "counter", "unit": "beacons", "target": 48, "quickSteps": [1, 5] },
+              "labels": ["collectible", "grind", "post_game", "completion"],
+              "expectedStage": "cleanup",
+              "confidence": 0.98,
+              "prerequisites": [],
+              "estimatedEffort": "3-5 hours with a route map.",
+              "crossPlatformGroupId": "group-signal-collector"
+            },
+            {
+              "id": "sd-steam-005",
+              "name": "100% Vector",
+              "description": "Unlock every Stellar Drift Steam achievement.",
+              "evidence": "100% unlocks after all non-completion achievements are complete.",
+              "reward": { "type": "achievement" },
+              "tracking": { "mode": "binary" },
+              "labels": ["completion"],
+              "expectedStage": "cleanup",
+              "confidence": 1.0,
+              "prerequisites": ["sd-steam-001", "sd-steam-002", "sd-steam-003", "sd-steam-004"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "myth-harbor",
+      "title": "Myth Harbor",
+      "aliases": ["myth harbor", "harbor"],
+      "sourceType": "fictional_demo",
+      "version": "2026.07.13",
+      "theme": {
+        "primary": "#34d399",
+        "secondary": "#fbbf24",
+        "surfaceGlow": "#10b981",
+        "mood": "coastal folklore mystery"
+      },
+      "summary": "A narrative adventure with safe story achievements, relationship missables, and post-game folklore collectibles.",
+      "achievementSets": [
+        {
+          "id": "myth-harbor-ps",
+          "platform": "playstation",
+          "edition": "Standard Edition",
+          "version": "2026.07.13",
+          "achievements": [
+            {
+              "id": "mh-ps-001",
+              "name": "Lantern Lit",
+              "description": "Arrive at the harbor and light the old watch lantern.",
+              "evidence": "The lantern event is the first mandatory story interaction.",
+              "reward": { "type": "trophy", "grade": "bronze" },
+              "tracking": { "mode": "binary" },
+              "labels": ["story"],
+              "expectedStage": "story",
+              "confidence": 0.99,
+              "prerequisites": []
+            },
+            {
+              "id": "mh-ps-002",
+              "name": "A Promise Kept",
+              "description": "Return Mira's compass before the tide festival.",
+              "evidence": "Mira leaves the harbor after the tide festival begins, making the compass return unavailable.",
+              "reward": { "type": "trophy", "grade": "silver" },
+              "tracking": { "mode": "binary" },
+              "labels": ["missable", "point_of_no_return"],
+              "expectedStage": "missables",
+              "confidence": 0.97,
+              "prerequisites": ["mh-ps-001"],
+              "spoilerSafeHint": "A harbor relationship task must be completed before a major festival sequence begins.",
+              "warning": "Give Mira the compass before starting the tide festival sequence."
+            },
+            {
+              "id": "mh-ps-003",
+              "name": "No Empty Nets",
+              "description": "Help every fisher in one morning route.",
+              "evidence": "The morning route can be replayed from the chapter select after finishing the story.",
+              "reward": { "type": "trophy", "grade": "bronze" },
+              "tracking": {
+                "mode": "checklist",
+                "items": [
+                  { "id": "barnaby", "name": "Fisher Barnaby" },
+                  { "id": "silas", "name": "Fisher Silas" },
+                  { "id": "clara", "name": "Fisher Clara" }
+                ]
+              },
+              "labels": ["post_game", "skill"],
+              "expectedStage": "cleanup",
+              "confidence": 0.82,
+              "prerequisites": ["mh-ps-001"],
+              "spoilerSafeHint": "A replayable morning route requires helping each participant in one run."
+            },
+            {
+              "id": "mh-ps-004",
+              "name": "Folklore Archivist",
+              "description": "Collect all 36 myth tablets.",
+              "evidence": "All myth tablets are available in post-game harbor free roam.",
+              "reward": { "type": "trophy", "grade": "gold" },
+              "tracking": { "mode": "binary" },
+              "labels": ["collectible", "grind", "post_game", "completion"],
+              "expectedStage": "cleanup",
+              "confidence": 0.98,
+              "prerequisites": [],
+              "estimatedEffort": "2-4 hours with late-game traversal upgrades."
+            },
+            {
+              "id": "mh-ps-005",
+              "name": "Harbor Oracle",
+              "description": "Unlock every Myth Harbor trophy.",
+              "evidence": "Platinum unlocks after all non-platinum trophies are complete.",
+              "reward": { "type": "trophy", "grade": "platinum" },
+              "tracking": { "mode": "binary" },
+              "labels": ["completion"],
+              "expectedStage": "cleanup",
+              "confidence": 1.0,
+              "prerequisites": ["mh-ps-001", "mh-ps-002", "mh-ps-003", "mh-ps-004"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ashen-circuit",
+      "title": "Ashen Circuit",
+      "aliases": ["ashen circuit", "circuit"],
+      "sourceType": "fictional_demo",
+      "version": "2026.07.13",
+      "theme": {
+        "primary": "#f97316",
+        "secondary": "#ef4444",
+        "surfaceGlow": "#ea580c",
+        "mood": "industrial arena tactics"
+      },
+      "summary": "A tactical arena game with a short campaign, difficulty achievements, optional online duels, and a weapon mastery grind.",
+      "achievementSets": [
+        {
+          "id": "ashen-circuit-xbox",
+          "platform": "xbox",
+          "edition": "Standard Edition",
+          "version": "2026.07.13",
+          "achievements": [
+            {
+              "id": "ac-xbox-001",
+              "name": "Ignition Test",
+              "description": "Clear the first arena trial.",
+              "evidence": "The first arena trial is mandatory and starts the campaign ladder.",
+              "reward": { "type": "gamerscore", "points": 15 },
+              "tracking": { "mode": "binary" },
+              "labels": ["story"],
+              "expectedStage": "story",
+              "confidence": 0.99,
+              "prerequisites": []
+            },
+            {
+              "id": "ac-xbox-002",
+              "name": "Mercy Protocol",
+              "description": "Spare the rival pilot at the end of Arena 5.",
+              "evidence": "The rival pilot decision happens once in Arena 5. Choosing execute locks the save out of this achievement.",
+              "reward": { "type": "gamerscore", "points": 30 },
+              "tracking": { "mode": "binary" },
+              "labels": ["missable", "point_of_no_return"],
+              "expectedStage": "missables",
+              "confidence": 0.96,
+              "prerequisites": ["ac-xbox-001"],
+              "spoilerSafeHint": "A one-time Arena 5 decision determines whether this achievement remains available.",
+              "warning": "Choose spare at the Arena 5 decision prompt."
+            },
+            {
+              "id": "ac-xbox-003",
+              "name": "Hard Reset",
+              "description": "Complete the campaign on Veteran difficulty.",
+              "evidence": "Veteran difficulty can be selected for a new campaign run after the first clear.",
+              "reward": { "type": "gamerscore", "points": 100 },
+              "tracking": { "mode": "binary" },
+              "labels": ["difficulty", "grind", "post_game"],
+              "expectedStage": "cleanup",
+              "confidence": 0.90,
+              "prerequisites": ["ac-xbox-001"],
+              "estimatedEffort": "4-6 hours after learning enemy patterns."
+            },
+            {
+              "id": "ac-xbox-004",
+              "name": "Weapon Memory",
+              "description": "Reach mastery rank 10 with all six weapon frames.",
+              "evidence": "Weapon mastery progress carries into post-game arena replays.",
+              "reward": { "type": "gamerscore", "points": 90 },
+              "tracking": {
+                "mode": "checklist",
+                "items": [
+                  { "id": "frame-01", "name": "Frame 1: Vanguard" },
+                  { "id": "frame-02", "name": "Frame 2: Striker" },
+                  { "id": "frame-03", "name": "Frame 3: Aegis" },
+                  { "id": "frame-04", "name": "Frame 4: Sentinel" },
+                  { "id": "frame-05", "name": "Frame 5: Hazard" },
+                  { "id": "frame-06", "name": "Frame 6: Tempest" }
+                ]
+              },
+              "labels": ["grind", "post_game", "completion"],
+              "expectedStage": "cleanup",
+              "confidence": 0.97,
+              "prerequisites": [],
+              "spoilerSafeHint": "Six weapon frames must each reach the required mastery rank.",
+              "estimatedEffort": "5-8 hours of repeat arena clears."
+            },
+            {
+              "id": "ac-xbox-005",
+              "name": "Duelist Ping",
+              "description": "Complete online duels.",
+              "evidence": "Online duel requires network matchmaking but does not affect campaign progression.",
+              "reward": { "type": "gamerscore", "points": 15 },
+              "tracking": { "mode": "counter", "unit": "duels", "quickSteps": [1] },
+              "labels": ["online"],
+              "expectedStage": "cleanup",
+              "confidence": 0.93,
+              "prerequisites": [],
+              "spoilerSafeHint": "An optional online activity uses network matchmaking and does not affect campaign progress.",
+              "warning": "Online availability should be checked before committing to full completion."
+            },
+            {
+              "id": "ac-xbox-006",
+              "name": "Circuit Sovereign",
+              "description": "Unlock every Ashen Circuit achievement.",
+              "evidence": "100% unlocks after all non-completion achievements are complete.",
+              "reward": { "type": "gamerscore", "points": 150 },
+              "tracking": { "mode": "binary" },
+              "labels": ["completion"],
+              "expectedStage": "cleanup",
+              "confidence": 1.0,
+              "prerequisites": ["ac-xbox-001", "ac-xbox-002", "ac-xbox-003", "ac-xbox-004", "ac-xbox-005"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

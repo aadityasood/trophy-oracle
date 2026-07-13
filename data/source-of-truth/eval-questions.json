@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "2.0",
+  "notes": "Evaluation prompts for checking whether Trophy Oracle answers are grounded in source-of-truth achievement evidence and set separation.",
+  "questions": [
+    {
+      "id": "eval-sd-001",
+      "gameId": "stellar-drift",
+      "achievementSetId": "stellar-drift-ps",
+      "question": "What should I do before signing the Chapter 4 sponsor contract on PlayStation?",
+      "expectedEvidenceIds": ["sd-ps-002"],
+      "mustMention": ["asteroid belt shortcut", "before signing the Chapter 4 sponsor contract"],
+      "revealSpoilers": true
+    },
+    {
+      "id": "eval-sd-002",
+      "gameId": "stellar-drift",
+      "achievementSetId": "stellar-drift-steam",
+      "question": "I have logged 35 telemetry beacons on Steam. Can I leave the rest for post-game, and how many remain?",
+      "expectedEvidenceIds": ["sd-steam-004"],
+      "mustMention": ["post-game", "free roam", "13", "beacons"],
+      "progressContext": {
+        "sd-steam-004": {
+          "achievementId": "sd-steam-004",
+          "completed": false,
+          "manualOverride": false,
+          "counterValue": 35,
+          "lastUpdated": "2026-07-13T00:00:00.000Z",
+          "provenance": "manual"
+        }
+      }
+    },
+    {
+      "id": "eval-sd-003",
+      "gameId": "stellar-drift",
+      "achievementSetId": "stellar-drift-ps",
+      "question": "What unlocks after I complete the opening tutorial race on PlayStation?",
+      "expectedEvidenceIds": ["sd-ps-001"],
+      "mustMention": ["opening tutorial race", "chapter selection"]
+    },
+    {
+      "id": "eval-sd-004",
+      "gameId": "stellar-drift",
+      "achievementSetId": "stellar-drift-steam",
+      "question": "What unlocks after I complete the opening tutorial race on Steam?",
+      "expectedEvidenceIds": ["sd-steam-001"],
+      "mustMention": ["opening tutorial race", "chapter selection"]
+    },
+    {
+      "id": "eval-mh-001",
+      "gameId": "myth-harbor",
+      "achievementSetId": "myth-harbor-ps",
+      "question": "Which achievement is missable around the tide festival?",
+      "expectedEvidenceIds": ["mh-ps-002"],
+      "mustMention": ["Mira", "compass", "before starting the tide festival"],
+      "revealSpoilers": true
+    },
+    {
+      "id": "eval-mh-002",
+      "gameId": "myth-harbor",
+      "achievementSetId": "myth-harbor-ps",
+      "question": "I already helped Fisher Barnaby during the morning route. Which fishers remain for No Empty Nets?",
+      "expectedEvidenceIds": ["mh-ps-003"],
+      "mustMention": ["Silas", "Clara"],
+      "revealSpoilers": true,
+      "progressContext": {
+        "mh-ps-003": {
+          "achievementId": "mh-ps-003",
+          "completed": false,
+          "manualOverride": false,
+          "checklistCompletion": {
+            "barnaby": true,
+            "silas": false,
+            "clara": false
+          },
+          "lastUpdated": "2026-07-13T00:00:00.000Z",
+          "provenance": "manual"
+        }
+      }
+    },
+    {
+      "id": "eval-ac-001",
+      "gameId": "ashen-circuit",
+      "achievementSetId": "ashen-circuit-xbox",
+      "question": "What is the Arena 5 point of no return for Ashen Circuit?",
+      "expectedEvidenceIds": ["ac-xbox-002"],
+      "mustMention": ["spare", "rival pilot", "Arena 5"],
+      "revealSpoilers": true
+    },
+    {
+      "id": "eval-ac-002",
+      "gameId": "ashen-circuit",
+      "achievementSetId": "ashen-circuit-xbox",
+      "question": "Does the local dataset prove that online servers are currently active?",
+      "expectedEvidenceIds": ["ac-xbox-005"],
+      "mustMention": ["not enough evidence", "online availability"],
+      "shouldRefuse": true
+    },
+    {
+      "id": "eval-ac-003",
+      "gameId": "ashen-circuit",
+      "achievementSetId": "ashen-circuit-xbox",
+      "question": "Can I import or sync my Ashen Circuit Xbox progress to my PlayStation account?",
+      "expectedEvidenceIds": [],
+      "mustMention": ["not supported", "local-only", "no cloud sync"],
+      "shouldRefuse": true,
+      "policyContext": "v1_product_boundary"
+    }
+  ]
+}
