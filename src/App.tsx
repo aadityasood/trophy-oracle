@@ -8,9 +8,14 @@ import {
   type PlatformId,
 } from './domain/achievement-schema';
 import { loadDemoGamesDataset } from './data/demo-games';
+import type { StorageLike } from './data/progress-storage';
+import { useProgressStore } from './features/progress/use-progress-store';
+import { AchievementTracker } from './features/progress/AchievementTracker';
 
-interface AppProps {
+export interface AppProps {
   datasetResult?: DatasetLoadResult;
+  storage?: StorageLike | null;
+  now?: () => string;
 }
 
 const EMPTY_GAMES: GameRecord[] = [];
@@ -34,12 +39,28 @@ function getSetLabel(set: AchievementSet): string {
   return `${platformLabels[set.platform]}${edition}`;
 }
 
-export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
-  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
-
+export default function App({
+  datasetResult = loadDemoGamesDataset(),
+  storage,
+  now,
+}: AppProps) {
   const games = datasetResult.success ? datasetResult.data.games : EMPTY_GAMES;
+
+  const {
+    store,
+    persistenceStatus,
+    actionStatus,
+    selectGameAction,
+    selectSetAction,
+    updateBinaryCompletion,
+    updateCounterValue,
+    updateChecklistItemCompletion,
+    updateNotes,
+    updateCompletionOverride,
+    undoAction,
+  } = useProgressStore({ storage, now });
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   const filteredGames = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -51,14 +72,14 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
       (game) =>
         game.title.toLowerCase().includes(normalizedQuery) ||
         game.aliases.some((alias) =>
-          alias.toLowerCase().includes(normalizedQuery),
-        ),
+          alias.toLowerCase().includes(normalizedQuery)
+        )
     );
   }, [games, searchQuery]);
 
   const selectedGame = useMemo(
-    () => games.find((game) => game.id === selectedGameId),
-    [games, selectedGameId],
+    () => games.find((game) => game.id === store.lastGameId),
+    [games, store.lastGameId]
   );
 
   const selectedSet = useMemo(() => {
@@ -66,11 +87,40 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
       return undefined;
     }
 
+    const preferredId = store.gameProgress[selectedGame.id]?.preferredSetId;
     return (
-      selectedGame.achievementSets.find((set) => set.id === selectedSetId) ??
+      selectedGame.achievementSets.find((set) => set.id === preferredId) ??
       selectedGame.achievementSets[0]
     );
-  }, [selectedGame, selectedSetId]);
+  }, [selectedGame, store.gameProgress]);
+
+  const selectedSetProgress =
+    selectedGame && selectedSet
+      ? store.gameProgress[selectedGame.id]?.sets[selectedSet.id]
+      : undefined;
+  const isSetVersionMismatch =
+    selectedSet !== undefined &&
+    selectedSetProgress !== undefined &&
+    selectedSetProgress.version !== selectedSet.version;
+
+  const undoSnapshot = selectedGame
+    ? store.undoState?.[selectedGame.id]
+    : undefined;
+  const undoSetDefinition = undoSnapshot
+    ? selectedGame?.achievementSets.find(
+        (set) => set.id === undoSnapshot.setId,
+      )
+    : undefined;
+  const undoActiveSet =
+    selectedGame && undoSnapshot
+      ? store.gameProgress[selectedGame.id]?.sets[undoSnapshot.setId]
+      : undefined;
+  const isUndoDisabled =
+    undoSnapshot !== undefined &&
+    (undoSetDefinition === undefined ||
+      undoActiveSet === undefined ||
+      undoActiveSet.version !== undoSetDefinition.version ||
+      undoSnapshot.previous.version !== undoSetDefinition.version);
 
   if (!datasetResult.success) {
     return (
@@ -80,7 +130,9 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
           className="max-w-xl w-full rounded-lg border border-red-500/50 bg-slate-900 p-6 space-y-3"
           data-testid="dataset-error"
         >
-          <h1 className="text-xl font-bold text-red-300">Demo data unavailable</h1>
+          <h1 className="text-xl font-bold text-red-300">
+            Demo data unavailable
+          </h1>
           <p className="text-sm text-slate-300">
             Trophy Oracle could not open its trusted local demo data. Please try
             again after the data has been checked.
@@ -98,10 +150,14 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
       } as CSSProperties)
     : {};
 
-  const handleSelectGame = (gameId: string) => {
-    setSelectedGameId(gameId);
-    const game = games.find((candidate) => candidate.id === gameId);
-    setSelectedSetId(game?.achievementSets[0]?.id ?? null);
+  const handleSelectGame = (game: GameRecord) => {
+    selectGameAction(game);
+  };
+
+  const handleSelectSet = (set: AchievementSet) => {
+    if (selectedGame) {
+      selectSetAction(selectedGame, set.id);
+    }
   };
 
   return (
@@ -131,6 +187,16 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
       </header>
 
       <main className="flex-1 max-w-6xl w-full mx-auto p-6 space-y-6">
+        {persistenceStatus && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="rounded border border-slate-800 bg-slate-900 p-3 text-sm text-slate-300"
+          >
+            {persistenceStatus}
+          </p>
+        )}
+
         <section aria-labelledby="games-heading" className="space-y-3">
           <h2
             id="games-heading"
@@ -151,7 +217,9 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
           >
             {filteredGames.length === 0
               ? `No games found matching "${searchQuery}".`
-              : `${filteredGames.length} demo ${filteredGames.length === 1 ? 'game' : 'games'} available.`}
+              : `${filteredGames.length} demo ${
+                  filteredGames.length === 1 ? 'game' : 'games'
+                } available.`}
           </p>
 
           {filteredGames.length > 0 && (
@@ -161,7 +229,7 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
                 return (
                   <button
                     key={game.id}
-                    onClick={() => handleSelectGame(game.id)}
+                    onClick={() => handleSelectGame(game)}
                     type="button"
                     aria-pressed={isSelected}
                     className={`text-left p-4 rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-secondary)] ${
@@ -207,7 +275,7 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
                     {selectedGame.summary}
                   </p>
                 </div>
-                <span className="text-xs px-2 py-1 bg-slate-800 text-slate-300 rounded">
+                <span className="text-xs px-2 py-1 bg-slate-800 text-slate-300 rounded self-start sm:self-auto">
                   {sourceTypeLabels[selectedGame.sourceType]}
                 </span>
               </div>
@@ -243,7 +311,7 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
                             name={`achievement-set-${selectedGame.id}`}
                             value={set.id}
                             checked={isSetSelected}
-                            onChange={() => setSelectedSetId(set.id)}
+                            onChange={() => handleSelectSet(set)}
                             style={{ accentColor: 'var(--theme-primary)' }}
                           />
                           <span>{getSetLabel(set)}</span>
@@ -264,36 +332,91 @@ export default function App({ datasetResult = loadDemoGamesDataset() }: AppProps
             </div>
 
             {selectedSet && (
-              <div
-                className="bg-slate-900 border border-slate-800 border-l-4 rounded-lg p-5 space-y-3"
-                style={{ borderLeftColor: 'var(--theme-surface-glow)' }}
-              >
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Platform roadmap
+              <div className="space-y-6">
+                <div
+                  className="bg-slate-900 border border-slate-800 border-l-4 rounded-lg p-5 space-y-3"
+                  style={{ borderLeftColor: 'var(--theme-surface-glow)' }}
+                >
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Platform roadmap
+                  </div>
+                  <h3 className="text-base font-bold text-slate-100">
+                    {getPlatformRoadmapLabel(selectedSet.platform)}
+                  </h3>
+                  <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                    <div>
+                      <dt className="text-xs text-slate-400">Platform</dt>
+                      <dd className="font-medium text-slate-200">
+                        {platformLabels[selectedSet.platform]}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-400">Edition</dt>
+                      <dd className="font-medium text-slate-200">
+                        {selectedSet.edition ?? 'Standard'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-400">Achievements</dt>
+                      <dd className="font-medium text-slate-200">
+                        {selectedSet.achievements.length}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
-                <h3 className="text-base font-bold text-slate-100">
-                  {getPlatformRoadmapLabel(selectedSet.platform)}
-                </h3>
-                <dl className="grid gap-3 text-sm sm:grid-cols-3">
-                  <div>
-                    <dt className="text-xs text-slate-400">Platform</dt>
-                    <dd className="font-medium text-slate-200">
-                      {platformLabels[selectedSet.platform]}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-slate-400">Edition</dt>
-                    <dd className="font-medium text-slate-200">
-                      {selectedSet.edition ?? 'Standard'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-slate-400">Achievements</dt>
-                    <dd className="font-medium text-slate-200">
-                      {selectedSet.achievements.length}
-                    </dd>
-                  </div>
-                </dl>
+
+                {/* Tracker Workbench */}
+                <AchievementTracker
+                  key={`${selectedGame.id}:${selectedSet.id}`}
+                  game={selectedGame}
+                  set={selectedSet}
+                  store={store}
+                  onBinaryCompletionChange={(achId, completed) =>
+                    updateBinaryCompletion(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      completed
+                    )
+                  }
+                  onCounterValueChange={(achId, val) =>
+                    updateCounterValue(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      val
+                    )
+                  }
+                  onChecklistItemCompletionChange={(achId, itemId, completed) =>
+                    updateChecklistItemCompletion(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      itemId,
+                      completed
+                    )
+                  }
+                  onNotesChange={(achId, notes) =>
+                    updateNotes(selectedGame, selectedSet.id, achId, notes)
+                  }
+                  onCompletionOverrideChange={(achId, override) =>
+                    updateCompletionOverride(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      override
+                    )
+                  }
+                  onUndo={() => undoAction(selectedGame.id)}
+                  actionStatus={actionStatus}
+                  isReadOnly={isSetVersionMismatch}
+                  isUndoDisabled={isUndoDisabled}
+                  undoDisabledReason={
+                    isUndoDisabled
+                      ? 'Undo is unavailable because its recorded set does not match the current trusted data version.'
+                      : undefined
+                  }
+                />
               </div>
             )}
           </section>
