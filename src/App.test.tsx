@@ -383,12 +383,15 @@ describe('App foundation and tracker integration', () => {
     game.achievementSets = [game.achievementSets[0], secondEdition];
     render(<App datasetResult={dataset} storage={null} now={fixedNow} />);
     await user.click(screen.getByRole('button', { name: /Stellar Drift/ }));
+    const firstTrackerCard = screen.getByRole('article', {
+      name: 'Achievement 1',
+    });
     await user.click(
-      screen.getByRole('button', {
+      within(firstTrackerCard).getByRole('button', {
         name: 'Reveal details for Achievement 1',
       }),
     );
-    expect(screen.getByText('First Burn')).toBeInTheDocument();
+    expect(within(firstTrackerCard).getByText('First Burn')).toBeInTheDocument();
 
     await user.click(
       within(screen.getByRole('group', { name: 'Select platform and edition' })).getByRole(
@@ -397,7 +400,11 @@ describe('App foundation and tracker integration', () => {
       ),
     );
     expect(screen.queryByText('First Burn')).not.toBeInTheDocument();
-    expect(screen.getByText('Achievement 1')).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole('article', { name: 'Achievement 1' }),
+      ).getByText('Achievement 1'),
+    ).toBeInTheDocument();
   });
 
   it('keeps no-set and dataset-failure transitions safe without changing hook order', async () => {
@@ -417,5 +424,129 @@ describe('App foundation and tracker integration', () => {
     await chooseGame('Stellar Drift');
     expect(screen.getByText('No achievement sets are available for this game.')).toBeInTheDocument();
     expect(screen.getByText('Fictional demo data')).toHaveClass('self-start');
+  });
+
+  it('restores pinned achievements and active stage on remount from storage', async () => {
+    const user = userEvent.setup();
+    const storage = new MemoryStorage();
+    const { unmount } = render(
+      <App datasetResult={getDataset()} storage={storage} now={fixedNow} />,
+    );
+    await chooseGame('Stellar Drift');
+
+    // Pin Achievement 1 (First Burn) and Achievement 4 (Signal Collector)
+    await user.click(
+      screen.getByRole('button', { name: 'Pin Achievement 1' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Pin Achievement 4' }),
+    );
+
+    // Select cleanup stage
+    await user.click(
+      screen.getByRole('button', { name: /Select Grind\/Cleanup stage/ }),
+    );
+
+    expect(screen.getByRole('heading', { name: 'Focus Board (2 / 5 pinned)' })).toBeInTheDocument();
+    unmount();
+
+    // Remount
+    render(<App datasetResult={getDataset()} storage={storage} now={fixedNow} />);
+    expect(screen.getByRole('heading', { name: 'Focus Board (2 / 5 pinned)' })).toBeInTheDocument();
+    const cleanupStage = screen.getByRole('button', { name: /Select Grind\/Cleanup stage/ });
+    expect(within(cleanupStage).getByText('Active')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unpin Achievement 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unpin Achievement 4' })).toBeInTheDocument();
+  });
+
+  it('keeps pins and active stage set-isolated across platform switching', async () => {
+    const user = userEvent.setup();
+    render(<App datasetResult={getDataset()} storage={null} now={fixedNow} />);
+    await chooseGame('Stellar Drift');
+
+    // Pin on PlayStation
+    await user.click(screen.getByRole('button', { name: 'Pin Achievement 1' }));
+    await user.click(screen.getByRole('button', { name: /Select Missables stage/ }));
+    expect(screen.getByRole('heading', { name: 'Focus Board (1 / 5 pinned)' })).toBeInTheDocument();
+
+    // Switch to Steam
+    const setGroup = screen.getByRole('group', { name: 'Select platform and edition' });
+    await user.click(within(setGroup).getByRole('radio', { name: 'Steam (Standard Edition)' }));
+
+    // Steam has 0 pins and falls back to Story stage
+    expect(screen.getByText(/No achievements pinned to the Focus Board/i)).toBeInTheDocument();
+    const storyStage = screen.getByRole('button', { name: /Select Story stage/ });
+    expect(within(storyStage).getByText('Active')).toBeInTheDocument();
+
+    // Pin on Steam
+    await user.click(screen.getByRole('button', { name: 'Pin Achievement 1' }));
+    expect(screen.getByRole('heading', { name: 'Focus Board (1 / 5 pinned)' })).toBeInTheDocument();
+
+    // Switch back to PlayStation -> restores its 1 pin and Missables active stage
+    await user.click(within(setGroup).getByRole('radio', { name: 'PlayStation (Standard Edition)' }));
+    expect(screen.getByRole('heading', { name: 'Focus Board (1 / 5 pinned)' })).toBeInTheDocument();
+    const missablesStage = screen.getByRole('button', { name: /Select Missables stage/ });
+    expect(within(missablesStage).getByText('Active')).toBeInTheDocument();
+  });
+
+  it('records pin and stage mutations in undo snapshot and restores previous state', async () => {
+    const user = userEvent.setup();
+    render(<App datasetResult={getDataset()} storage={null} now={fixedNow} />);
+    await chooseGame('Stellar Drift');
+
+    // Pin Achievement 1
+    await user.click(screen.getByRole('button', { name: 'Pin Achievement 1' }));
+    expect(screen.getByRole('heading', { name: 'Focus Board (1 / 5 pinned)' })).toBeInTheDocument();
+
+    // Undo pin
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Undo last change in PlayStation (Standard Edition)',
+      }),
+    );
+    expect(screen.getByText(/No achievements pinned to the Focus Board/i)).toBeInTheDocument();
+
+    // Change active stage
+    await user.click(screen.getByRole('button', { name: /Select Missables stage/ }));
+    const missables = screen.getByRole('button', { name: /Select Missables stage/ });
+    expect(within(missables).getByText('Active')).toBeInTheDocument();
+
+    // Undo active stage
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Undo last change in PlayStation (Standard Edition)',
+      }),
+    );
+    const story = screen.getByRole('button', { name: /Select Story stage/ });
+    expect(within(story).getByText('Active')).toBeInTheDocument();
+  });
+
+  it('locks Focus Board and roadmap controls when set version is mismatched', async () => {
+    const dataset = getDataset();
+    const game = dataset.data.games.find((candidate) => candidate.id === 'stellar-drift');
+    if (!game) throw new Error('Missing Stellar Drift fixture');
+    let store = selectGame(createDefaultLocalProgressStore(), game, MOCK_TIMESTAMP);
+    store = selectPreferredSet(store, game, 'stellar-drift-ps', MOCK_TIMESTAMP);
+    store.gameProgress[game.id].sets['stellar-drift-ps'].pinnedAchievementIds = ['sd-ps-001'];
+    store.gameProgress[game.id].sets['stellar-drift-ps'].version = 'older-version';
+
+    const storage = new MemoryStorage();
+    storage.seed(DEFAULT_STORAGE_KEY, JSON.stringify(store));
+
+    render(<App datasetResult={dataset} storage={storage} now={fixedNow} />);
+
+    expect(screen.getByText(/different data version/i)).toBeInTheDocument();
+    const focusBoard = screen.getByRole('region', { name: 'Focus Board (1 / 5 pinned)' });
+    expect(
+      within(focusBoard).getByRole('button', {
+        name: 'Unpin Achievement 1 from focus board',
+      }),
+    ).toBeDisabled();
+    expect(
+      within(focusBoard).getByRole('checkbox', {
+        name: 'Mark Achievement 1 complete',
+      }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Select Story stage/ })).toBeDisabled();
   });
 });

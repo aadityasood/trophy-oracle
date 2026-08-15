@@ -4,11 +4,13 @@ import {
   createDefaultLocalProgressStore,
   selectGame,
   selectPreferredSet,
+  setActiveStage,
   setBinaryCompletion,
   setChecklistItemCompletion,
   setCompletionOverride,
   setCounterValue,
   setNotes,
+  togglePin,
   undoLastMutation,
 } from '../../domain/progress-engine';
 import type { MutationResult } from '../../domain/progress-engine';
@@ -113,7 +115,11 @@ export function useProgressStore(options: UseProgressStoreOptions = {}) {
         setActionStatus(result.error);
         return;
       }
-      if (result.changed) commitStore(result.store);
+      if (result.changed) {
+        commitStore(result.store);
+      } else {
+        setActionStatus(null);
+      }
     },
     [commitStore],
   );
@@ -261,6 +267,41 @@ export function useProgressStore(options: UseProgressStoreOptions = {}) {
     [commitMutation, dependencies],
   );
 
+  const togglePinAction = useCallback(
+    (game: GameRecord, setId: string, achievementId: string, pin: boolean) => {
+      commitMutation(
+        togglePin(
+          latestStoreRef.current,
+          game,
+          setId,
+          achievementId,
+          pin,
+          dependencies.now(),
+        ),
+      );
+    },
+    [commitMutation, dependencies],
+  );
+
+  const setActiveStageAction = useCallback(
+    (
+      game: GameRecord,
+      setId: string,
+      stage: 'story' | 'missables' | 'cleanup' | undefined,
+    ) => {
+      commitMutation(
+        setActiveStage(
+          latestStoreRef.current,
+          game,
+          setId,
+          stage,
+          dependencies.now(),
+        ),
+      );
+    },
+    [commitMutation, dependencies],
+  );
+
   const undoAction = useCallback(
     (gameId: string): void => {
       const result = undoLastMutation(latestStoreRef.current, gameId);
@@ -285,6 +326,8 @@ export function useProgressStore(options: UseProgressStoreOptions = {}) {
     updateChecklistItemCompletion,
     updateNotes,
     updateCompletionOverride,
+    togglePinAction,
+    setActiveStageAction,
     undoAction,
   };
 }

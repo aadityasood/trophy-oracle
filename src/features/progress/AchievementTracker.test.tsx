@@ -33,6 +33,7 @@ function renderTracker(
     onChecklistItemCompletionChange: vi.fn(),
     onNotesChange: vi.fn(),
     onCompletionOverrideChange: vi.fn(),
+    onTogglePin: vi.fn(),
     onUndo: vi.fn(),
   };
   render(
@@ -305,5 +306,51 @@ describe('AchievementTracker', () => {
         name: 'Undo last change in PlayStation (Standard Edition)',
       }),
     ).toBeDisabled();
+  });
+
+  it('renders pin controls with unique accessible names, aria-pressed, and calls onTogglePin', async () => {
+    const user = userEvent.setup();
+    const store = createStore();
+    store.gameProgress['stellar-drift'].sets[
+      'stellar-drift-ps'
+    ].pinnedAchievementIds = ['sd-ps-001'];
+    const callbacks = renderTracker({ store });
+
+    const pinnedButton = screen.getByRole('button', {
+      name: 'Unpin Achievement 1',
+    });
+    expect(pinnedButton).toBeInTheDocument();
+    expect(pinnedButton).toHaveAttribute('aria-pressed', 'true');
+    expect(pinnedButton).toHaveTextContent('Pinned');
+
+    const unpinnedButton = screen.getByRole('button', {
+      name: 'Pin Achievement 2',
+    });
+    expect(unpinnedButton).toBeInTheDocument();
+    expect(unpinnedButton).toHaveAttribute('aria-pressed', 'false');
+    expect(unpinnedButton).toHaveTextContent('Pin');
+
+    await user.click(pinnedButton);
+    expect(callbacks.onTogglePin).toHaveBeenCalledWith('sd-ps-001', false);
+
+    await user.click(unpinnedButton);
+    expect(callbacks.onTogglePin).toHaveBeenCalledWith('sd-ps-002', true);
+  });
+
+  it('disables pin button when isReadOnly is true and displays domain error message from actionStatus', () => {
+    renderTracker({
+      isReadOnly: true,
+      actionStatus: 'Cannot pin more than 5 achievements per set',
+    });
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Pin Achievement 1',
+      }),
+    ).toBeDisabled();
+
+    expect(
+      screen.getByText('Cannot pin more than 5 achievements per set'),
+    ).toBeInTheDocument();
   });
 });

@@ -45,6 +45,7 @@ In scope:
 - RAG-style evidence retrieval.
 - Deterministic plus model-assisted achievement labeling.
 - Versioned manual progress tracking with one-step undo, notes, and focus board pinning.
+- A set-local progress overview with a three-stage roadmap (Story, Missables, Grind/Cleanup), Focus Board quick controls (binary, bounded/open counters, checklists, unpin), and deterministic spoiler-safe Oracle Focus recommendations prioritizing urgency, active stage match, partial progress, canonical stage order, and source order.
 - Grounded spoiler-safe hints by default, with an explicit reveal action before exact hidden details are shown.
 - A deterministic roadmap and evidence/refusal fallback when local model inference is unavailable.
 - AI Lab panel for transparency.

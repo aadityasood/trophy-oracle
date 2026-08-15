@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
-  getPlatformRoadmapLabel,
   type AchievementSet,
   type DatasetLoadResult,
   type GameRecord,
@@ -11,6 +10,7 @@ import { loadDemoGamesDataset } from './data/demo-games';
 import type { StorageLike } from './data/progress-storage';
 import { useProgressStore } from './features/progress/use-progress-store';
 import { AchievementTracker } from './features/progress/AchievementTracker';
+import { ProgressOverview } from './features/progress/ProgressOverview';
 
 export interface AppProps {
   datasetResult?: DatasetLoadResult;
@@ -57,6 +57,8 @@ export default function App({
     updateChecklistItemCompletion,
     updateNotes,
     updateCompletionOverride,
+    togglePinAction,
+    setActiveStageAction,
     undoAction,
   } = useProgressStore({ storage, now });
 
@@ -333,37 +335,55 @@ export default function App({
 
             {selectedSet && (
               <div className="space-y-6">
-                <div
-                  className="bg-slate-900 border border-slate-800 border-l-4 rounded-lg p-5 space-y-3"
-                  style={{ borderLeftColor: 'var(--theme-surface-glow)' }}
-                >
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    Platform roadmap
-                  </div>
-                  <h3 className="text-base font-bold text-slate-100">
-                    {getPlatformRoadmapLabel(selectedSet.platform)}
-                  </h3>
-                  <dl className="grid gap-3 text-sm sm:grid-cols-3">
-                    <div>
-                      <dt className="text-xs text-slate-400">Platform</dt>
-                      <dd className="font-medium text-slate-200">
-                        {platformLabels[selectedSet.platform]}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-400">Edition</dt>
-                      <dd className="font-medium text-slate-200">
-                        {selectedSet.edition ?? 'Standard'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-slate-400">Achievements</dt>
-                      <dd className="font-medium text-slate-200">
-                        {selectedSet.achievements.length}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
+                {/* Progress Overview (Roadmap + Focus Board + Oracle Focus) */}
+                <ProgressOverview
+                  key={`overview-${selectedGame.id}:${selectedSet.id}`}
+                  game={selectedGame}
+                  set={selectedSet}
+                  store={store}
+                  onBinaryCompletionChange={(achId, completed) =>
+                    updateBinaryCompletion(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      completed,
+                    )
+                  }
+                  onCounterValueChange={(achId, val) =>
+                    updateCounterValue(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      val,
+                    )
+                  }
+                  onChecklistItemCompletionChange={(achId, itemId, completed) =>
+                    updateChecklistItemCompletion(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      itemId,
+                      completed,
+                    )
+                  }
+                  onTogglePin={(achId, pin) =>
+                    togglePinAction(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      pin,
+                    )
+                  }
+                  onSelectActiveStage={(stage) =>
+                    setActiveStageAction(
+                      selectedGame,
+                      selectedSet.id,
+                      stage,
+                    )
+                  }
+                  actionStatus={actionStatus}
+                  isReadOnly={isSetVersionMismatch}
+                />
 
                 {/* Tracker Workbench */}
                 <AchievementTracker
@@ -376,7 +396,7 @@ export default function App({
                       selectedGame,
                       selectedSet.id,
                       achId,
-                      completed
+                      completed,
                     )
                   }
                   onCounterValueChange={(achId, val) =>
@@ -384,7 +404,7 @@ export default function App({
                       selectedGame,
                       selectedSet.id,
                       achId,
-                      val
+                      val,
                     )
                   }
                   onChecklistItemCompletionChange={(achId, itemId, completed) =>
@@ -393,7 +413,7 @@ export default function App({
                       selectedSet.id,
                       achId,
                       itemId,
-                      completed
+                      completed,
                     )
                   }
                   onNotesChange={(achId, notes) =>
@@ -404,11 +424,18 @@ export default function App({
                       selectedGame,
                       selectedSet.id,
                       achId,
-                      override
+                      override,
+                    )
+                  }
+                  onTogglePin={(achId, pin) =>
+                    togglePinAction(
+                      selectedGame,
+                      selectedSet.id,
+                      achId,
+                      pin,
                     )
                   }
                   onUndo={() => undoAction(selectedGame.id)}
-                  actionStatus={actionStatus}
                   isReadOnly={isSetVersionMismatch}
                   isUndoDisabled={isUndoDisabled}
                   undoDisabledReason={

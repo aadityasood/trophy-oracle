@@ -4,7 +4,7 @@ Trophy Oracle is a local-first achievement companion for players who want a clea
 
 It is designed as a small ML-engineering portfolio project: trusted achievement data, structured guide generation, grounded question answering, deterministic fallbacks, and eventually local model inference without paid AI APIs.
 
-> **Project status:** Active early development. The cross-platform data contract and trusted React application foundation are complete. Manual progress tracking, the final interface, and local AI features are next.
+> **Project status:** Active early development. The cross-platform data contract, trusted React foundation, manual progress tracking, and functional progress overview are complete. The visual redesign and local AI features are next.
 
 ## The Idea
 
@@ -26,9 +26,12 @@ Trophy Oracle is built around that gap:
 - Derive `Platinum Roadmap` for PlayStation and `100% Roadmap` elsewhere.
 - Apply game-specific accent colors.
 - Validate bundled data through a strict Zod trusted-data gate.
+- Versioned manual progress engine with local storage persistence and one-step undo.
+- Set-local Focus Board with up to 5 pinned achievements and quick controls.
+- Three-stage roadmap (Story, Missables, Grind/Cleanup) with counts and persisted active stage.
+- Deterministic spoiler-safe Oracle Focus recommendations.
+- Preserve a spoiler-safe foundation by withholding achievement details until revealed.
 - Show a calm failure state instead of exposing raw validation details.
-- Preserve a spoiler-safe foundation by withholding achievement details.
-- Verify behavior with 25 focused schema and interface tests.
 
 The current interface is a functional foundation. Its visual identity, tracker controls, and animation system will be redesigned during the dedicated UI phase.
 
@@ -37,8 +40,8 @@ The current interface is a functional foundation. Its visual identity, tracker c
 - [x] Platform-neutral achievement and progress contracts
 - [x] Fictional PlayStation, Xbox, and Steam demo data
 - [x] React application shell and trusted-data validation
-- [ ] Versioned manual progress engine, persistence, undo, and reconciliation
-- [ ] Focus Board, roadmap tracking, notes, and spoiler controls
+- [x] Versioned manual progress engine, persistence, undo, and reconciliation
+- [x] Focus Board, roadmap tracking, notes, and spoiler controls
 - [ ] Iterative game-aware visual design and purposeful animation
 - [ ] Grounded retrieval, cited Q&A, and deterministic evaluation
 - [ ] Local model adapter, initially targeting Ollama
@@ -78,7 +81,7 @@ npm run build
 - Tailwind CSS
 - Zod
 - Vitest and Testing Library
-- Browser-local persistence in the upcoming progress-engine phase
+- Browser-local progress persistence
 - Local model inference in a later AI phase
 
 ## Source Of Truth

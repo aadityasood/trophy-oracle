@@ -23,6 +23,7 @@ export interface AchievementTrackerProps {
     achievementId: string,
     override: boolean,
   ) => void;
+  onTogglePin: (achievementId: string, pin: boolean) => void;
   onUndo: () => void;
   actionStatus?: string | null;
   isReadOnly?: boolean;
@@ -67,6 +68,7 @@ export function AchievementTracker({
   onChecklistItemCompletionChange,
   onNotesChange,
   onCompletionOverrideChange,
+  onTogglePin,
   onUndo,
   actionStatus,
   isReadOnly = false,
@@ -265,19 +267,48 @@ export function AchievementTracker({
                       )}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    aria-label={`${isRevealed ? 'Hide' : 'Reveal'} details for ${displayLabel}`}
-                    onClick={() =>
-                      setRevealed((current) => ({
-                        ...current,
-                        [achievement.id]: !current[achievement.id],
-                      }))
-                    }
-                    className="shrink-0 rounded border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-800"
-                  >
-                    {isRevealed ? 'Hide details' : 'Reveal details'}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label={`${activeSetProgress.pinnedAchievementIds.includes(achievement.id) ? 'Unpin' : 'Pin'} ${displayLabel}`}
+                      aria-pressed={activeSetProgress.pinnedAchievementIds.includes(achievement.id)}
+                      disabled={isReadOnly}
+                      onClick={() =>
+                        onTogglePin(
+                          achievement.id,
+                          !activeSetProgress.pinnedAchievementIds.includes(
+                            achievement.id,
+                          ),
+                        )
+                      }
+                      className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        activeSetProgress.pinnedAchievementIds.includes(
+                          achievement.id,
+                        )
+                          ? 'border-amber-700 bg-amber-950/60 text-amber-200 hover:bg-amber-900/60'
+                          : 'border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      {activeSetProgress.pinnedAchievementIds.includes(
+                        achievement.id,
+                      )
+                        ? 'Pinned'
+                        : 'Pin'}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`${isRevealed ? 'Hide' : 'Reveal'} details for ${displayLabel}`}
+                      onClick={() =>
+                        setRevealed((current) => ({
+                          ...current,
+                          [achievement.id]: !current[achievement.id],
+                        }))
+                      }
+                      className="shrink-0 rounded border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-800"
+                    >
+                      {isRevealed ? 'Hide details' : 'Reveal details'}
+                    </button>
+                  </div>
                 </div>
 
                 {isRevealed && (

@@ -243,6 +243,262 @@ describe('useProgressStore', () => {
     expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).not.toBeNull();
   });
 
+  it('pins and unpins achievements with single writes, stored order, latest-state chaining, and replaces undo snapshot', () => {
+    const storage = new MemoryStorage();
+    let clockCounter = 0;
+    const customNow = () => `2026-07-22T00:00:0${clockCounter++}.000Z`;
+    const { result } = renderHook(() =>
+      useProgressStore({ storage, now: customNow }),
+    );
+
+    act(() => result.current.selectGameAction(mockGameStellarDrift));
+    const writesAfterSelect = storage.writeCount;
+
+    act(() => {
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-004',
+        true,
+      );
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-001',
+        true,
+      );
+    });
+
+    const setProgress =
+      result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'];
+    expect(setProgress.pinnedAchievementIds).toEqual(['sd-ps-004', 'sd-ps-001']);
+    expect(storage.writeCount).toBe(writesAfterSelect + 2);
+    expect(result.current.actionStatus).toBeNull();
+    expect(
+      result.current.store.undoState?.['stellar-drift']?.previous
+        .pinnedAchievementIds,
+    ).toEqual(['sd-ps-004']);
+
+    // Unpin sd-ps-004
+    act(() => {
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-004',
+        false,
+      );
+    });
+
+    expect(
+      result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps']
+        .pinnedAchievementIds,
+    ).toEqual(['sd-ps-001']);
+  });
+
+  it('rejects pinning beyond the 5-pin limit with a domain error, no store change, and no storage write', () => {
+    const storage = new MemoryStorage();
+    const { result } = renderHook(() =>
+      useProgressStore({ storage, now: fixedNow }),
+    );
+
+    act(() => {
+      result.current.selectGameAction(mockGameStellarDrift);
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-001',
+        true,
+      );
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-002',
+        true,
+      );
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-004',
+        true,
+      );
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-005',
+        true,
+      );
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-006',
+        true,
+      );
+    });
+
+    expect(
+      result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps']
+        .pinnedAchievementIds,
+    ).toHaveLength(5);
+    const writesAtLimit = storage.writeCount;
+
+    // Attempt to pin a 6th achievement
+    act(() => {
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-007',
+        true,
+      );
+    });
+
+    expect(result.current.actionStatus).toContain('Cannot pin more than 5');
+    expect(storage.writeCount).toBe(writesAtLimit);
+    expect(
+      result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps']
+        .pinnedAchievementIds,
+    ).toHaveLength(5);
+  });
+
+  it('treats no-op pin toggles as no-ops without storage writes or status errors', () => {
+    const storage = new MemoryStorage();
+    const { result } = renderHook(() =>
+      useProgressStore({ storage, now: fixedNow }),
+    );
+
+    act(() => {
+      result.current.selectGameAction(mockGameStellarDrift);
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-001',
+        true,
+      );
+    });
+    const writesBefore = storage.writeCount;
+
+    // Pinning an already-pinned achievement
+    act(() => {
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-001',
+        true,
+      );
+    });
+    expect(storage.writeCount).toBe(writesBefore);
+    expect(result.current.actionStatus).toBeNull();
+
+    // Unpinning an unpinned achievement
+    act(() => {
+      result.current.togglePinAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-002',
+        false,
+      );
+    });
+    expect(storage.writeCount).toBe(writesBefore);
+    expect(result.current.actionStatus).toBeNull();
+  });
+
+  it('mutates activeStage with single writes, updates undo snapshot, and supports no-op checks', () => {
+    const storage = new MemoryStorage();
+    const { result } = renderHook(() =>
+      useProgressStore({ storage, now: fixedNow }),
+    );
+
+    act(() => result.current.selectGameAction(mockGameStellarDrift));
+    const writesBefore = storage.writeCount;
+
+    act(() => {
+      result.current.setActiveStageAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'missables',
+      );
+    });
+
+    expect(
+      result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps']
+        .activeStage,
+    ).toBe('missables');
+    expect(storage.writeCount).toBe(writesBefore + 1);
+    expect(
+      result.current.store.undoState?.['stellar-drift']?.previous.activeStage,
+    ).toBeUndefined();
+
+    // No-op same stage
+    act(() => {
+      result.current.setActiveStageAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'missables',
+      );
+    });
+    expect(storage.writeCount).toBe(writesBefore + 1);
+
+    // A second active-stage mutation replaces the game-scoped snapshot.
+    act(() => {
+      result.current.setActiveStageAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'cleanup',
+      );
+    });
+    expect(
+      result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps']
+        .activeStage,
+    ).toBe('cleanup');
+    expect(storage.writeCount).toBe(writesBefore + 2);
+    expect(
+      result.current.store.undoState?.['stellar-drift']?.previous.activeStage,
+    ).toBe('missables');
+
+    // Clear active stage.
+    act(() => {
+      result.current.setActiveStageAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        undefined,
+      );
+    });
+    expect(
+      result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps']
+        .activeStage,
+    ).toBeUndefined();
+    expect(storage.writeCount).toBe(writesBefore + 3);
+  });
+
+  it('clears a stale action error after a later successful no-op without writing', () => {
+    const storage = new MemoryStorage();
+    const { result } = renderHook(() =>
+      useProgressStore({ storage, now: fixedNow }),
+    );
+
+    act(() => {
+      result.current.selectGameAction(mockGameStellarDrift);
+      result.current.updateCounterValue(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        'sd-ps-004',
+        -1,
+      );
+    });
+    expect(result.current.actionStatus).toContain('non-negative integer');
+    const writesBefore = storage.writeCount;
+
+    act(() => {
+      result.current.setActiveStageAction(
+        mockGameStellarDrift,
+        'stellar-drift-ps',
+        undefined,
+      );
+    });
+
+    expect(result.current.actionStatus).toBeNull();
+    expect(storage.writeCount).toBe(writesBefore);
+  });
+
   it('starts from the domain default rather than a duplicated schema literal', () => {
     const { result } = renderHook(() =>
       useProgressStore({ storage: null, now: fixedNow }),

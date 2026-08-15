@@ -22,7 +22,8 @@ Included in v1:
 - Q&A that grounds achievement answers in retrieved game and set context, with deterministic refusal for unsupported v1 capabilities.
 - Manual progress tracking supporting binary, counter (bounded and open), and checklist tracking modes.
 - Strictly set-local progress: platform and edition sets keep independent completion, pins, active stage, and orphan state even when achievements are marked equivalent. Undo is one game-scoped last-mutation snapshot that records one set at a time, not an independent history for every set.
-- UI features for manual completion overrides, one-step undo (covering progress, counters, checklists, notes, pins, and active stage), up to 5 pinned Focus Board achievements per set, and last-updated timestamps.
+- UI features for manual completion overrides, one-step undo (covering progress, counters, checklists, notes, pins, and active stage), up to 5 pinned Focus Board achievements per set with quick controls, and last-updated timestamps.
+- Deterministic Oracle Focus recommendations returning up to 3 incomplete achievements from the selected set where prerequisites are met, stably prioritized by urgency (warning/missable/point_of_no_return), active stage match, partial progress, canonical stage order, and source order.
 - Local restoration of the most recent game, its preferred achievement set, and that set's active roadmap stage.
 - Grounded spoiler-safe hints by default, with explicit reveal before exact hidden names, conditions, warnings, or checklist details enter the UI or model context.
 - A deterministic set-local roadmap and evidence/refusal experience when local model inference is unavailable.
