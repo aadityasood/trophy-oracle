@@ -1,59 +1,63 @@
 # Trophy Oracle
 
-Trophy Oracle is a local-first achievement companion for players who want a clear completion roadmap and a reliable place to track progress that games do not expose.
+Trophy Oracle is a local-first, spoiler-aware completion cockpit. It keeps achievement progress, roadmap state, pins, notes, and spoiler choices private in the browser.
 
-It is designed as a small ML-engineering portfolio project: trusted achievement data, structured guide generation, grounded question answering, deterministic fallbacks, and eventually local model inference without paid AI APIs.
-
-> **Project status:** Active early development. The cross-platform data contract, trusted React foundation, manual progress tracking, and functional progress overview are complete. The visual redesign and local AI features are next.
-
-## The Idea
-
-Achievement progress support is inconsistent across games and platforms. The achievements that most need counters often leave players using notes or spreadsheets.
-
-Trophy Oracle is built around that gap:
-
-- Track PlayStation trophies, Xbox achievements, and Steam achievements independently.
-- Use binary, counter, and checklist tracking for hidden or incomplete in-game progress.
-- Organize completion into Story, Missables, and Cleanup.
-- Keep progress local and private.
-- Ask questions against trusted guide evidence rather than an unconstrained chatbot.
-- Fall back to deterministic guidance when a local model is unavailable.
+The working application is a deterministic foundation built on fictional demo data. Hunt Memory is the planned signature feature family for named runs, honest counters, parked-session summaries, and point-of-no-return checks. Grounded local questions and answers are a later phase.
 
 ## What Works Today
 
-- Search across three fictional demo games.
-- Select platform- and edition-specific achievement sets.
-- Derive `Platinum Roadmap` for PlayStation and `100% Roadmap` elsewhere.
-- Apply game-specific accent colors.
-- Validate bundled data through a strict Zod trusted-data gate.
-- Versioned manual progress engine with local storage persistence and one-step undo.
-- Set-local Focus Board with up to 5 pinned achievements and quick controls.
-- Three-stage roadmap (Story, Missables, Grind/Cleanup) with counts and persisted active stage.
-- Deterministic spoiler-safe Oracle Focus recommendations.
-- Preserve a spoiler-safe foundation by withholding achievement details until revealed.
-- Show a calm failure state instead of exposing raw validation details.
+The current codebase is a functional foundation using bundled fictional demo games:
 
-The current interface is a functional foundation. Its visual identity, tracker controls, and animation system will be redesigned during the dedicated UI phase.
+- Search across three fictional demo titles.
+- Select platform- and edition-specific achievement sets (PlayStation, Xbox, Steam).
+- Automatically format dynamic headers: `Platinum Roadmap` on PlayStation and `100% Roadmap` elsewhere.
+- Apply game-specific accent colors to the interface.
+- Validate all bundled data through a strict Zod data gate.
+- Track progress in browser storage with one game-scoped undo snapshot for the latest set mutation.
+- Manage a set-local Focus Board with up to 5 pinned achievements and quick controls (binary checks, counters, checklists).
+- Organize work across a three-stage roadmap (Story, Missables, Grind/Cleanup) with persisted active stage.
+- View deterministic, spoiler-safe Oracle Focus recommendations based on urgency, stage match, partial progress, and canonical order.
+- Protect against spoilers by masking hidden achievement names, conditions, and warnings until revealed.
+- Keep unsupported saved-data versions read-only and use session-only progress when browser storage is unavailable.
+
+## Planned Direction
+
+- **Hunt Memory:** Run Ledger, Honest Counters, Resume Capsule, and Safety Gate.
+- **Tonight Mode:** Approximate plans using 20, 45, or 90 minute presets and Chill, Grind, or Challenge preferences. Scheduling waits for structured, evidence-backed effort data.
+- **Completion Targets:** Platform-appropriate Platinum, base-game 100%, or all-content scope without changing official rewards.
+- **Grounded Oracle:** Read-only local reasoning with selected-set citations, spoiler consent, explicit refusals, and Oracle Receipts.
+- **AI Lab:** A future view for retrieval, citations, confidence, refusals, and evaluation results. It is not implemented today.
+- **Portable Completion Packs:** Deferred validated local files with versioning, provenance, integrity checks, and safe handling as untrusted input. The trust and verification mechanism is still open.
+
+The no-inference path remains useful for progress arithmetic, roadmap and stage projections, Oracle Focus ranking, trusted evidence display or direct lookup, and explicit refusals. It does not promise parity with inference-backed questions, semantic retrieval, or generated explanations.
 
 ## Roadmap
 
-- [x] Platform-neutral achievement and progress contracts
-- [x] Fictional PlayStation, Xbox, and Steam demo data
-- [x] React application shell and trusted-data validation
-- [x] Versioned manual progress engine, persistence, undo, and reconciliation
-- [x] Focus Board, roadmap tracking, notes, and spoiler controls
-- [ ] Iterative game-aware visual design and purposeful animation
-- [ ] Grounded retrieval, cited Q&A, and deterministic evaluation
-- [ ] Local model adapter, initially targeting Ollama
-- [ ] JSON backup/restore and offline PWA behavior
+1. Define the public product direction and backlog.
+2. Define Hunt Memory data and migration rules.
+3. Build deterministic run, certainty, and persistence behavior with tests.
+4. Add Resume Capsule, Safety Gate, and approximate session planning.
+5. Apply responsive game-reactive styling, accessible motion, and reduced-motion behavior.
+6. Add grounded retrieval, evaluation, fallback rules, and a local inference adapter.
+7. Consider Portable Completion Packs and real-data ingestion after the core is reliable.
 
-Live platform authentication, cloud sync, telemetry, scraping, and paid model APIs are intentionally outside the first version.
+## Non-Goals
+
+To keep the application focused, private, and reliable, the following features are intentionally out of scope:
+
+- No leaderboards, public profiles, rarity scoring, or social feeds.
+- No live network login or background synchronization with PSN, Xbox Live, Steam, or RetroAchievements.
+- No automated web scraping of third-party guide websites.
+- No cloud accounts, remote servers, or telemetry tracking.
+- No paid third-party AI APIs.
+- No automatic progress guessing without user confirmation.
+- No generated achievement facts, warnings, or save advice outside trusted dataset records.
 
 ## Local Development
 
 ### Requirements
 
-- A current Node.js release
+- Node.js (current LTS release recommended)
 - npm
 
 ### Run the app
@@ -63,7 +67,7 @@ npm ci
 npm run dev
 ```
 
-Vite will print the local URL, normally `http://localhost:5173`.
+Vite will start the development server, usually at `http://localhost:5173`.
 
 ### Verify the project
 
@@ -82,11 +86,11 @@ npm run build
 - Zod
 - Vitest and Testing Library
 - Browser-local progress persistence
-- Local model inference in a later AI phase
+- Local inference in a later phase
 
 ## Source Of Truth
 
-The product and data behavior are specified before implementation:
+Product behavior and data contracts are documented in the repository:
 
 - [Product brief](docs/source-of-truth/product-brief.md)
 - [Data contract](docs/source-of-truth/data-contract.md)
@@ -95,8 +99,4 @@ The product and data behavior are specified before implementation:
 - [Fictional demo dataset](data/source-of-truth/demo-games.json)
 - [Evaluation questions](data/source-of-truth/eval-questions.json)
 
-All bundled games and achievement records are fictional. They exist to make progress behavior, retrieval, evaluation, and failure handling reproducible without relying on live platform services.
-
-## ML Engineering Focus
-
-The eventual AI layer is deliberately narrow. It will retrieve evidence for one selected achievement set, produce structured roadmap output, cite supported claims, refuse unsupported requests, and remain unable to change user progress directly. Progress mutations stay inside the deterministic application layer and always require explicit user action.
+All bundled games and achievement records are fictional. They exercise the current deterministic tracker and provide structured fixtures for planned retrieval and evaluation work without third-party platform dependencies.

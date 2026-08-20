@@ -1,68 +1,134 @@
 # Trophy Oracle Product Brief
 
-## One-Line Pitch
+## Product Positioning
 
-Trophy Oracle is a local AI system that turns trusted game achievement and progress data into grounded roadmaps and evidence-backed Q&A.
+Trophy Oracle is a local-first, spoiler-aware completion cockpit. It remembers the active hunt and helps a player safely finish a game.
 
-## Portfolio Angle
+Platform profiles and public trackers record lifetime trophy and achievement unlocks. They do not preserve active playthrough context, separate multiple runs, or track incomplete counters that the game hides. Trophy Oracle fills that gap with private completion state. Planned Hunt Memory and grounded Oracle work will add run context, uncertain progress, session planning, and evidence-bound guidance.
 
-This is an ML-engineering showcase. The app should demonstrate a practical AI pipeline:
+Trophy Oracle is not a social network, leaderboard, profile showcase, or generic game backlog tracker. It complements official platforms and community guides by owning active completion state.
 
-- Local model inference.
-- Retrieval over trusted achievement evidence.
-- Achievement classification and roadmap planning.
-- Structured generation with citations.
-- Confidence, evidence, and evaluation visibility.
+## Current Foundation And Target Direction
 
-The product should still feel polished, but the "AI Lab" side of the interface should make the engineering work visible.
+The working application is a deterministic React foundation built around bundled fictional demo data. It supports game search, platform and edition set selection, manual progress tracking, a three-stage roadmap, set-local pins, notes, one game-scoped undo snapshot, spoiler controls, and deterministic Oracle Focus recommendations.
 
-## Primary User Flow
+The target architecture adds Hunt Memory and a grounded local Oracle. Retrieval, inference-backed questions and answers, generated explanations, citation validation, confidence reporting, evaluation views, and the AI Lab are planned. They are not part of the current application.
 
-1. User searches a game title.
-2. User selects an edition and platform-specific achievement set.
-3. App matches the selection against the built-in source-of-truth dataset.
-4. App applies the game's theme accent colors.
-5. App retrieves achievement evidence and classifies achievements.
-6. App generates a three-step roadmap guide:
-   - Step 1: Story
-   - Step 2: Missables
-   - Step 3: Grind/Cleanup
-7. User tracks manual progress (binary check, count increment, checklist tick) or pins up to 5 focus achievements within the selected achievement set.
-8. User asks questions about the guide.
-9. App grounds achievement answers in retrieved local evidence, cites non-refusal claims, and uses a deterministic product-boundary refusal for unsupported capabilities.
+## Player Flow
 
-On later launches, the local progress store restores the most recently opened game, that game's preferred achievement set, and that set's active roadmap stage. Pins, notes, counters, and checklist state are restored only from the same achievement set.
+Today, a player can:
 
-## V1 Product Boundary
+1. Search the bundled fictional demo games.
+2. Select a platform and edition-specific achievement set.
+3. Move between Story, Missables, and Grind/Cleanup roadmap stages.
+4. Track binary achievements, counters, checklists, notes, and completion overrides.
+5. Pin up to five achievements in the selected set.
+6. Review deterministic Oracle Focus recommendations and reveal protected details when ready.
+7. Restore the latest game, preferred set, active stage, and set-local progress from browser storage when valid saved data exists.
 
-V1 is local-first and demo-data-first.
+The planned Hunt Memory and Oracle flow will add named runs, honest certainty, parked-session summaries, point-of-no-return checks, approximate session planning, grounded questions and answers, and visible recommendation receipts.
 
-In scope:
+## Signature Feature Family: Hunt Memory
 
-- Fictional built-in demo games with PlayStation, Xbox, and Steam sets.
-- Independent progress, completion calculations, pins, active stage, and orphan state for every platform- and edition-specific achievement set; equivalent achievements never copy progress automatically. Each game keeps at most one last-mutation undo snapshot, which records and restores only one set after the UI identifies it. Selection-only set switches preserve that snapshot, while a later mutation in another set replaces it.
-- Local AI adapter boundary.
-- RAG-style evidence retrieval.
-- Deterministic plus model-assisted achievement labeling.
-- Versioned manual progress tracking with one-step undo, notes, and focus board pinning.
-- A set-local progress overview with a three-stage roadmap (Story, Missables, Grind/Cleanup), Focus Board quick controls (binary, bounded/open counters, checklists, unpin), and deterministic spoiler-safe Oracle Focus recommendations prioritizing urgency, active stage match, partial progress, canonical stage order, and source order.
-- Grounded spoiler-safe hints by default, with an explicit reveal action before exact hidden details are shown.
-- A deterministic roadmap and evidence/refusal fallback when local model inference is unavailable.
-- AI Lab panel for transparency.
-- Game-specific accent theme.
+Hunt Memory is the planned state layer for active completion runs. It captures the ephemeral details that platform APIs and generic trackers ignore.
 
-Out of scope:
+Hunt Memory includes four core capabilities (planned for future phases):
 
-- Paid AI APIs.
-- Real-time web achievement/trophy search.
-- Scraping production trophy or achievement sites.
-- Live platform logins (PSN, Xbox Live, Steam).
-- Accounts, telemetry, cloud sync, or cross-platform progress transfer.
-- Model fine-tuning.
-- Desktop packaging.
+1. **Run Ledger**
+   - Stores named playthrough contexts (such as Blind Run, Cleanup Run, or New Game Plus).
+   - Keeps current-run progress distinct from lifetime achievements where the future data contract supports it.
+   - Never assumes that counters, collectibles, or story progress carry over between runs unless the game evidence explicitly confirms it.
 
-## Later Versions
+2. **Honest Counters**
+   - Supports explicit progress certainty states: exact, at-least (minimum), estimated, or unknown (tracking starting now).
+   - Prevents false precision. The interface never displays invented remaining counts or completion percentages when underlying data is uncertain.
+   - Separates direct player observations from imported or platform-reported totals.
 
-V2 can add real data ingestion, user-imported progress files, richer evaluation reports, and a labeled dataset editor.
+3. **Resume Capsule**
+   - Provides a local "Park Run" action when a player steps away from a game.
+   - Records current location or chapter, last confirmed progress, intended next step, and active missable warnings.
+   - Displays a compact summary on return: Last Time, Next Action, and Active Risks.
 
-V3 can add a fine-tuned small local model or adapter trained on curated achievement-roadmap examples.
+4. **Safety Gate**
+   - Warns the player before known points of no return.
+   - Lists unfinished missable achievements, uncertain counters relevant to the cutoff, and recommended save slots.
+   - Acts strictly as an advisory check. It never blocks the player and never mutates progress state automatically.
+
+## Supporting Backlog Features
+
+- **Tonight Mode:** The player chooses a 20, 45, or 90 minute budget and a Chill, Grind, or Challenge preference. Plans are approximate and constraint-aware. A future data contract must define structured, evidence-backed effort ranges, buckets, or another deterministic representation before scheduling is implemented. The product must not invent exact fit from the current free-text `estimatedEffort` field.
+- **Completion Target:** An explicit goal setting per game (such as PlayStation Platinum, base-game 100%, or all-content/DLC completion). This adjusts roadmap filtering without redefining platform rewards or altering recorded progress.
+- **Oracle Receipt:** A transparent explanation panel for every recommendation. It details why an item was suggested, cites relevant achievement IDs and evidence, lists active constraints, and notes data uncertainty.
+- **Knowledge Transfer:** Cross-platform equivalence mapping allows games on different platforms to share trusted guide knowledge. Progress, pins, runs, and undo history remain strictly isolated by achievement-set ID.
+- **AI Lab:** A planned portfolio view for future retrieval results, citations, confidence, refusals, and evaluation behavior. It is separate from the current Oracle Focus list and tracker evidence display.
+- **Portable Completion Packs:** Deferred local files for achievement data, evidence, trackers, and themes. Packs will require versioning, provenance, validation, integrity checks, and safe handling as untrusted input. The later ingestion and security contract will choose the signing, trust, and verification mechanism.
+
+## Grounded Oracle Direction
+
+The planned Oracle will answer player questions using trusted achievement evidence and explicit Hunt Memory context. It is not implemented today.
+
+Key architecture principles:
+
+- **Evidence Grounding:** The Oracle reads only retrieved achievement records from the selected set, active run state, progress certainty, and explicit spoiler permissions.
+- **Read-Only Oracle Boundary:** The Oracle cannot modify progress, certainty values, run ledgers, notes, pins, or Safety Gate states. It can suggest an update, but applying changes requires explicit user confirmation through the deterministic interface.
+- **Strict Citation and Refusal:** Every factual non-refusal claim must cite achievement IDs from the selected set. If evidence is insufficient, the Oracle returns a grounded refusal rather than guessing.
+- **No-Inference Core:** Existing progress arithmetic, roadmap and stage projections, Oracle Focus ranking, trusted evidence display or direct lookup, and explicit refusals remain available without local inference. Semantic retrieval, generated explanations, inference-backed questions and answers, and citation validation remain planned.
+
+## Development Sequence
+
+1. Define the public product direction and backlog.
+2. Define a versioned Hunt Memory data contract and migration policy.
+3. Build the deterministic Hunt Memory engine and persistence behavior with tests.
+4. Add Resume Capsule, Safety Gate, and session-planning interactions.
+5. Apply the game-reactive visual identity, responsive density, purposeful motion, reduced-motion behavior, and readable time presentation.
+6. Add grounded retrieval, evaluation, deterministic fallback behavior, and a local inference adapter.
+7. Consider Portable Completion Packs and real-data ingestion only after Hunt Memory and grounded Oracle behavior are reliable.
+
+The visual overhaul follows the signature feature contracts so the interface is built around concrete user workflows.
+
+## Current V1 Implementation Boundary
+
+The current codebase is a working local foundation using bundled demo data.
+
+### Currently Implemented (Working Today)
+
+- Three fictional demo games with PlayStation, Xbox, and Steam achievement sets.
+- Independent progress tracking, completion math, pins, active stage, and orphan quarantine for each platform and edition set.
+- Versioned browser-local progress with one game-scoped undo snapshot for the latest set mutation.
+- Tracking modes for binary checkboxes, bounded/open counters, and multi-item checklists.
+- Focus Board supporting up to 5 pinned achievements per set with quick controls.
+- Three-stage roadmap (Story, Missables, Grind/Cleanup) with persisted active stage and dynamic platform labels ("Platinum Roadmap" or "100% Roadmap").
+- Deterministic, spoiler-safe Oracle Focus recommendations prioritizing warnings, active stage match, partial progress, and canonical ordering.
+- Spoiler protections that mask hidden details until the player chooses to reveal them.
+- Game-specific accent theme colors.
+- Read-only protection for unsupported saved-data versions and session-only behavior when browser storage is unavailable.
+
+### Planned for Future Releases
+
+- Hunt Memory features: Run Ledger, Honest Counters, Resume Capsule, and Safety Gate.
+- Tonight Mode session planning.
+- Selectable Completion Targets (Platinum, 100%, All DLC).
+- Oracle Receipts with explicit constraint records.
+- Grounded retrieval, inference-backed questions and answers, citation validation, and AI Lab evaluation views.
+- A local inference adapter.
+- Portable Completion Packs and custom dataset imports.
+
+### Explicit Non-Goals
+
+- No leaderboards, public profiles, rarity scoring, or social feeds.
+- No live network login or background synchronization with PSN, Xbox Live, Steam, or RetroAchievements.
+- No automated web scraping of third-party guide websites.
+- No cloud accounts, remote servers, or external telemetry.
+- No paid third-party AI APIs.
+- No automatic progress guessing without user confirmation.
+- No generated achievement facts, missable warnings, or save advice outside trusted dataset records.
+
+## Unresolved Implementation Questions
+
+These technical questions are reserved for future data contract and engineering tasks:
+
+1. **Run Ledger Identity and Migration:** How to structure multi-run storage keys and migrate single-run v1 progress stores without data loss.
+2. **Certainty Arithmetic:** How exact, at-least, estimated, and unknown certainty states propagate into aggregate completion percentages and deterministic filters.
+3. **Completion Target Partitioning:** How base-game achievements and DLC packs are separated, indexed, and evaluated without violating platform-specific reward definitions.
+4. **Tonight Mode Effort:** Which structured effort ranges, buckets, provenance rules, and estimation behavior can support approximate planning without false precision.
+5. **Completion Pack Trust:** Which validation, provenance, integrity, trust, and verification mechanisms safely handle untrusted local files.
