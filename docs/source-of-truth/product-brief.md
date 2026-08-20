@@ -36,12 +36,19 @@ Hunt Memory includes four core capabilities (planned for future phases):
 
 1. **Run Ledger**
    - Stores named playthrough contexts (such as Blind Run, Cleanup Run, or New Game Plus).
-   - Keeps current-run progress distinct from lifetime achievements where the future data contract supports it.
+   - Uses an immutable run ID unique within each achievement set and a user-facing display name.
+   - Starts each user-created run with fresh default progress and no carried notes, pins, certainty, or completion state.
+   - Keeps active stage, pins, achievement progress, tracker state, notes, timestamps, and orphaned progress strictly run-local.
+   - Preserves a removed set's complete run ledger in game-level retired storage outside active completion calculations.
+   - Retains one version-guarded, run-aware undo snapshot per game that restores only the previous state of its target run without modifying current selection.
+   - Defines an explicit, lossless migration from Schema 2.0 stores into a deterministic legacy run.
    - Never assumes that counters, collectibles, or story progress carry over between runs unless the game evidence explicitly confirms it.
 
 2. **Honest Counters**
-   - Supports explicit progress certainty states: exact, at-least (minimum), estimated, or unknown (tracking starting now).
-   - Prevents false precision. The interface never displays invented remaining counts or completion percentages when underlying data is uncertain.
+   - Supports four explicit progress certainty states: exact, at-least (minimum), estimated, or unknown (tracking starting now).
+   - Prevents false precision. Bounded counters with exact or at-least certainty auto-complete when the recorded count reaches the target. Estimated and unknown counters never auto-complete.
+   - The interface preserves observations above a target, clamps derived remaining values to zero, caps displayed percentages at 100, and never presents uncertain bounds or estimates as exact.
+   - Roadmap and stage completion remain achievement-based, so uncertain counters do not contribute invented fractional percentages.
    - Separates direct player observations from imported or platform-reported totals.
 
 3. **Resume Capsule**
@@ -105,7 +112,7 @@ The current codebase is a working local foundation using bundled demo data.
 
 ### Planned for Future Releases
 
-- Hunt Memory features: Run Ledger, Honest Counters, Resume Capsule, and Safety Gate.
+- Hunt Memory runtime features: Run Ledger, Honest Counters, Resume Capsule, and Safety Gate (the Schema 3.0 data contract is defined; runtime implementation remains planned).
 - Tonight Mode session planning.
 - Selectable Completion Targets (Platinum, 100%, All DLC).
 - Oracle Receipts with explicit constraint records.
@@ -125,10 +132,8 @@ The current codebase is a working local foundation using bundled demo data.
 
 ## Unresolved Implementation Questions
 
-These technical questions are reserved for future data contract and engineering tasks:
+The run ledger storage schema, certainty arithmetic rules, and Schema 2.0 to 3.0 migration policy are specified in the data contract. These remaining technical questions are reserved for future data contract and engineering tasks:
 
-1. **Run Ledger Identity and Migration:** How to structure multi-run storage keys and migrate single-run v1 progress stores without data loss.
-2. **Certainty Arithmetic:** How exact, at-least, estimated, and unknown certainty states propagate into aggregate completion percentages and deterministic filters.
-3. **Completion Target Partitioning:** How base-game achievements and DLC packs are separated, indexed, and evaluated without violating platform-specific reward definitions.
-4. **Tonight Mode Effort:** Which structured effort ranges, buckets, provenance rules, and estimation behavior can support approximate planning without false precision.
-5. **Completion Pack Trust:** Which validation, provenance, integrity, trust, and verification mechanisms safely handle untrusted local files.
+1. **Completion Target Partitioning / DLC Grouping:** How base-game achievements and DLC packs are separated, indexed, and evaluated without violating platform-specific reward definitions.
+2. **Tonight Mode Effort:** Which structured effort ranges, buckets, provenance rules, and estimation behavior can support approximate planning without false precision.
+3. **Completion Pack Trust:** Which validation, provenance, integrity, trust, and verification mechanisms safely handle untrusted local files.

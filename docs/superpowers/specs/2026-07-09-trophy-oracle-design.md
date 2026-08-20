@@ -69,17 +69,29 @@ Hunt Memory will expand the local state engine beyond simple checklist ticking. 
 ### 1. Run Ledger
 - Allows players to create and switch between named playthrough contexts (such as "Blind Playthrough", "Cleanup Run", or "NG+ Speedrun").
 - Keeps the active run visible near the selected game and set.
-- Keeps current-run progress distinct from lifetime records where the future data contract allows.
+- Identifies each run by an immutable run ID unique within the achievement set, with a user-facing display name.
+- Starts a new run with default progress, no notes or pins, and no state copied from another run. Creating a run makes it active without changing progress undo.
+- Keeps active stage, pins, achievement progress, tracker state, notes, timestamps, and orphaned progress strictly run-local.
+- Moves a removed set's complete run ledger into game-level retired storage that cannot affect active totals. A returning set restores that ledger only when its version and tracking shapes are compatible; otherwise it remains retired with a visible conflict state.
+- Retains one version-guarded, run-aware undo snapshot per game that restores only the target run's previous state without modifying current selection.
+- Defines an explicit, lossless migration from Schema 2.0 stores into a deterministic legacy run.
 - Never assumes that counters, collectibles, or completion status carry over between runs unless verified by trusted evidence.
-- Requires confirmation before an action could discard or merge run context. The future data contract will define storage and migration rules.
+- Run merging, carry-over rules, destructive run deletion, and cross-run completion aggregation remain excluded from the core contract.
 
 ### 2. Honest Counters
 - Replaces naive numbers with four distinct progress certainty states:
-  - Exact: Verified by the player or system.
+  - Exact: Verified by the player or system with a nonnegative value.
   - At-Least (Minimum): Confirmed minimum count when exact total is uncertain.
   - Estimated: Approximate count based on player memory or milestones.
-  - Unknown: Tracking initiated from this point forward.
-- Prevents false precision. The UI never calculates invented remaining counts or completion percentages from uncertain data.
+  - Unknown: Tracking initiated from this point forward with an ISO-8601 UTC start timestamp.
+- Enforces deterministic auto-completion: bounded counters with exact or at-least certainty complete when the recorded count reaches the target; estimated and unknown counters never auto-complete.
+- Prevents false precision:
+  - Exact counters may show exact remaining counts and percentages, with remaining clamped to zero and percentage capped at 100.
+  - At-least counters may show labelled lower bounds and at-most remaining values, clamped to the valid display range, but never exact claims.
+  - Estimated counters may show approximate values clamped to the valid display range, but never exact aggregates.
+  - Unknown counters show only observations since tracking began.
+- Preserves nonnegative stored observations above a bounded target instead of clamping saved data.
+- Roadmap and stage completion remain achievement-based, so uncertain unfinished counters do not contribute invented fractional percentages.
 - Keeps manual observations distinct from imported or platform-reported figures.
 - Shows certainty and provenance beside the value without implying equal authority.
 
@@ -199,8 +211,8 @@ Future support for versioned, validated local files containing game metadata, ac
 
 ## Unresolved Technical Questions
 
-1. **Storage Schema for Multi-Run Ledgers:** How to store multiple runs per set cleanly in localStorage while keeping fast lookup and easy migration from the v1 format.
-2. **Certainty Propagation Logic:** Mathematical rules for calculating overall progress percentages when some counters are exact, some are minimums, and others are unknown.
-3. **DLC Grouping and Target Isolation:** Clean schema conventions for tagging DLC expansions without disrupting platform-specific trophy grades or gamerscore totals.
-4. **Tonight Mode Effort:** Structured effort ranges, buckets, provenance rules, and estimation behavior that support approximate plans without false precision.
-5. **Completion Pack Trust:** Validation, provenance, integrity, trust, and verification rules for safely handling untrusted local files.
+The run ledger storage schema, certainty arithmetic rules, and Schema 2.0 to 3.0 migration policy are specified in the data contract. These remaining technical questions are reserved for future design and engineering tasks:
+
+1. **Completion Target Partitioning / DLC Grouping:** Clean schema conventions for tagging DLC expansions without disrupting platform-specific trophy grades or gamerscore totals.
+2. **Tonight Mode Effort:** Structured effort ranges, buckets, provenance rules, and estimation behavior that support approximate plans without false precision.
+3. **Completion Pack Trust:** Validation, provenance, integrity, trust, and verification rules for safely handling untrusted local files.
