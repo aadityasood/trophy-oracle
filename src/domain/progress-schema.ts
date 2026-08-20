@@ -2,12 +2,12 @@ import { z } from 'zod';
 
 export const CURRENT_STORE_SCHEMA_VERSION = '2.0';
 
-const NonBlankStringSchema = z.string().refine(
+export const NonBlankStringSchema = z.string().refine(
   (value) => value.trim().length > 0,
   { message: 'Must contain at least one non-whitespace character' },
 );
 
-const distinctNonBlankIds = z
+export const distinctNonBlankIds = z
   .array(NonBlankStringSchema)
   .refine((ids) => new Set(ids).size === ids.length, {
     message: 'IDs must be distinct',
