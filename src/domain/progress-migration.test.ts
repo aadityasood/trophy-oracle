@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { transformProgressStoreV2ToV3 } from './progress-migration';
+import { LocalProgressStoreSchema } from './progress-schema';
 
 const MIGRATION_TS = '2026-07-23T00:00:00.000Z';
 
@@ -460,6 +461,90 @@ describe('pure Schema 2.0 to 3.0 migration', () => {
         expect.stringContaining(
           'A completion override requires completed to be true',
         ),
+      ],
+    });
+    expect('store' in result).toBe(false);
+  });
+
+  it('rejects a V2 achievement carrying both counterValue and checklistCompletion as an invalid V3 target', () => {
+    const source = {
+      schemaVersion: '2.0',
+      gameProgress: {
+        game: {
+          gameId: 'game',
+          sets: {
+            set: {
+              setId: 'set',
+              version: '1',
+              pinnedAchievementIds: [],
+              progress: {
+                ach: {
+                  achievementId: 'ach',
+                  completed: false,
+                  manualOverride: false,
+                  counterValue: 2,
+                  checklistCompletion: { item: true },
+                  lastUpdated: MIGRATION_TS,
+                  provenance: 'manual',
+                },
+              },
+            },
+          },
+          orphanedProgress: {},
+        },
+      },
+    };
+
+    expect(LocalProgressStoreSchema.safeParse(source).success).toBe(true);
+
+    const result = transformProgressStoreV2ToV3(source, MIGRATION_TS);
+
+    expect(result).toEqual({
+      success: false,
+      code: 'INVALID_TARGET_STORE',
+      message: 'Transformed store failed Schema 3.0 validation',
+      conflicts: [
+        expect.stringContaining(
+          'Achievement progress cannot contain both counter and checklist state',
+        ),
+      ],
+    });
+    expect('store' in result).toBe(false);
+  });
+
+  it('rejects a Schema 2.0 binary orphan with manualOverride at the source boundary', () => {
+    const source = {
+      schemaVersion: '2.0',
+      gameProgress: {
+        game: {
+          gameId: 'game',
+          sets: {},
+          orphanedProgress: {
+            old: {
+              ach: {
+                achievementId: 'ach',
+                completed: true,
+                manualOverride: true,
+                lastUpdated: MIGRATION_TS,
+                provenance: 'manual',
+                trackingModeAtRemoval: 'binary',
+              },
+            },
+          },
+        },
+      },
+    };
+
+    expect(LocalProgressStoreSchema.safeParse(source).success).toBe(false);
+
+    const result = transformProgressStoreV2ToV3(source, MIGRATION_TS);
+
+    expect(result).toEqual({
+      success: false,
+      code: 'INVALID_SOURCE_STORE',
+      message: 'Source store is not a valid Schema 2.0 store',
+      conflicts: [
+        expect.stringContaining('Binary progress cannot use manualOverride'),
       ],
     });
     expect('store' in result).toBe(false);
