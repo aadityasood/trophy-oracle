@@ -10,15 +10,19 @@ describe('progress schema common primitives', () => {
   it('accepts real UTC timestamps and rejects offsets and impossible calendar values', () => {
     expect(isIsoUtcString('2026-07-22T12:00:00Z')).toBe(true);
     expect(isIsoUtcString('2026-07-22T12:00:00.123456Z')).toBe(true);
+    expect(isIsoUtcString('2026-07-22T12:00:00.123456+00:00')).toBe(true);
     expect(isIsoUtcString('2024-02-29T23:59:59+00:00')).toBe(true);
 
     expect(isIsoUtcString('0000-01-01T00:00:00Z')).toBe(false);
+    expect(isIsoUtcString('2026-00-22T12:00:00Z')).toBe(false);
+    expect(isIsoUtcString('2026-13-22T12:00:00Z')).toBe(false);
     expect(isIsoUtcString('2026-02-29T12:00:00Z')).toBe(false);
     expect(isIsoUtcString('2026-04-31T12:00:00Z')).toBe(false);
     expect(isIsoUtcString('2026-07-22T24:00:00Z')).toBe(false);
     expect(isIsoUtcString('2026-07-22T12:60:00Z')).toBe(false);
     expect(isIsoUtcString('2026-07-22T12:00:60Z')).toBe(false);
     expect(isIsoUtcString('2026-07-22T12:00:00-00:00')).toBe(false);
+    expect(isIsoUtcString('2026-07-22T12:00:00-05:00')).toBe(false);
     expect(isIsoUtcString('2026-07-22T12:00:00+05:30')).toBe(false);
     expect(isIsoUtcString('2026-07-22')).toBe(false);
   });
