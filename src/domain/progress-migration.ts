@@ -18,8 +18,8 @@ import type {
 import {
   CURRENT_STORE_SCHEMA_VERSION,
   LocalProgressStoreSchema,
-  isIsoUtcString,
 } from './progress-schema';
+import { isIsoUtcString } from './progress-schema-common';
 import type {
   AchievementProgress,
   AchievementSetProgress,

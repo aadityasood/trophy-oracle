@@ -3,7 +3,6 @@ import {
   CURRENT_STORE_SCHEMA_VERSION,
   LocalProgressStoreSchema,
   ReconciliationDeltaReportSchema,
-  isIsoUtcString,
 } from './progress-schema';
 import type { LocalProgressStore } from './progress-schema';
 
@@ -42,21 +41,6 @@ function createValidStore(): LocalProgressStore {
 }
 
 describe('progress schema', () => {
-  it('accepts real UTC timestamps and rejects offsets and impossible calendar values', () => {
-    expect(isIsoUtcString('2026-07-22T12:00:00Z')).toBe(true);
-    expect(isIsoUtcString('2026-07-22T12:00:00.123456Z')).toBe(true);
-    expect(isIsoUtcString('2024-02-29T23:59:59+00:00')).toBe(true);
-
-    expect(isIsoUtcString('2026-02-29T12:00:00Z')).toBe(false);
-    expect(isIsoUtcString('2026-04-31T12:00:00Z')).toBe(false);
-    expect(isIsoUtcString('2026-07-22T24:00:00Z')).toBe(false);
-    expect(isIsoUtcString('2026-07-22T12:60:00Z')).toBe(false);
-    expect(isIsoUtcString('2026-07-22T12:00:60Z')).toBe(false);
-    expect(isIsoUtcString('2026-07-22T12:00:00-00:00')).toBe(false);
-    expect(isIsoUtcString('2026-07-22T12:00:00+05:30')).toBe(false);
-    expect(isIsoUtcString('2026-07-22')).toBe(false);
-  });
-
   it('accepts a complete current-version store', () => {
     expect(LocalProgressStoreSchema.safeParse(createValidStore()).success).toBe(
       true,
