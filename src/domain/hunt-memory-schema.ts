@@ -4,7 +4,7 @@ import {
   ProgressProvenanceSchema,
   distinctNonBlankIds,
   isIsoUtcString,
-} from './progress-schema';
+} from './progress-schema-common';
 
 export const HUNT_MEMORY_STORE_SCHEMA_VERSION = '3.0';
 
