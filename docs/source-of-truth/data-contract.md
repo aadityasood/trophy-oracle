@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The data contract defines the source of truth for Trophy Oracle v1. The AI pipeline treats these files as trusted evidence and avoids claims outside them.
+The data contract defines the source of truth for Trophy Oracle V1. The AI pipeline treats these files as trusted evidence and avoids claims outside them.
 
 ## Game Record
 
