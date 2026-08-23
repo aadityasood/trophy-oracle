@@ -1,14 +1,14 @@
-import {
-  HUNT_MEMORY_STORE_SCHEMA_VERSION,
-  LocalProgressStoreV3Schema,
-} from '../domain/hunt-memory-schema';
+import { LocalProgressStoreV3Schema } from '../domain/hunt-memory-schema';
 import type {
   LocalProgressStoreV3,
   ProgressMigrationReport,
 } from '../domain/hunt-memory-schema';
 import { transformProgressStoreV2ToV3 } from '../domain/progress-migration';
+import { createDefaultHuntMemoryStore } from '../domain/hunt-memory-lifecycle';
 import { DEFAULT_STORAGE_KEY } from './progress-storage';
 import type { StorageLike } from './progress-storage';
+
+export { createDefaultHuntMemoryStore };
 
 export const HUNT_MEMORY_STORAGE_KEY = DEFAULT_STORAGE_KEY;
 
@@ -64,13 +64,6 @@ function readSchemaVersion(parsed: unknown): unknown {
     return (parsed as { schemaVersion?: unknown }).schemaVersion;
   }
   return undefined;
-}
-
-export function createDefaultHuntMemoryStore(): LocalProgressStoreV3 {
-  return {
-    schemaVersion: HUNT_MEMORY_STORE_SCHEMA_VERSION,
-    gameProgress: {},
-  };
 }
 
 export function loadOrMigrateHuntMemoryProgress(
