@@ -14,6 +14,14 @@ The working application is a deterministic React foundation built around bundled
 
 The target architecture adds Hunt Memory and a grounded local Oracle. Retrieval, inference-backed questions and answers, generated explanations, citation validation, confidence reporting, evaluation views, and the AI Lab are planned. They are not part of the current application.
 
+## V1 Proving Experience
+
+V1 must prove that Trophy Oracle can guide a real completion run, not only demonstrate its architecture with fictional data. The release target is one validated PlayStation Completion Pack for Dark Souls II: Scholar of the First Sin, with the exact release, region, and supported game version confirmed before authoring.
+
+The owner must be able to use one active run to plan the platinum, select the current area and nearest bonfire, see unfinished achievement work, reveal progressively more precise directions, understand blocked or later-run requirements, and view validated markers on original schematic area maps. The pack covers every platinum-relevant objective for the selected edition, not every item in the game.
+
+This experience remains planned until implemented and validated during a real playthrough. It does not read the running game, scrape guides, copy commercial maps, infer the player's position, or let a model invent route facts or change progress.
+
 ## Player Flow
 
 Today, a player can:
@@ -63,12 +71,14 @@ Hunt Memory includes four core capabilities (planned for future phases):
 
 ## Supporting Backlog Features
 
+Detailed feature definitions live in [feature-backlog.md](./feature-backlog.md). These entries are planned product direction, not current application behavior.
+
 - **Tonight Mode:** The player chooses a 20, 45, or 90 minute budget and a Chill, Grind, or Challenge preference. Plans are approximate and constraint-aware. A future data contract must define structured, evidence-backed effort ranges, buckets, or another deterministic representation before scheduling is implemented. The product must not invent exact fit from the current free-text `estimatedEffort` field.
 - **Completion Target:** An explicit goal setting per game (such as PlayStation Platinum, base-game 100%, or all-content/DLC completion). This adjusts roadmap filtering without redefining platform rewards or altering recorded progress.
 - **Oracle Receipt:** A transparent explanation panel for every recommendation. It details why an item was suggested, cites relevant achievement IDs and evidence, lists active constraints, and notes data uncertainty.
 - **Knowledge Transfer:** Cross-platform equivalence mapping allows games on different platforms to share trusted guide knowledge. Progress, pins, runs, and undo history remain strictly isolated by achievement-set ID.
 - **AI Lab:** A planned portfolio view for future retrieval results, citations, confidence, refusals, and evaluation behavior. It is separate from the current Oracle Focus list and tracker evidence display.
-- **Portable Completion Packs:** Deferred local files for achievement data, evidence, trackers, and themes. Packs will require versioning, provenance, validation, integrity checks, and safe handling as untrusted input. The later ingestion and security contract will choose the signing, trust, and verification mechanism.
+- **Completion Packs:** V1 includes one bundled, validated Dark Souls II pilot pack containing achievement data, evidence, routes, and schematic-map markers. User-imported packs remain deferred and will require versioning, provenance, validation, integrity checks, and safe handling as untrusted input. A later ingestion and security contract will choose the signing, trust, and verification mechanism.
 
 ## Grounded Oracle Direction
 
@@ -86,10 +96,13 @@ Key architecture principles:
 1. Define the public product direction and backlog.
 2. Define a versioned Hunt Memory data contract and migration policy.
 3. Build the deterministic Hunt Memory engine and persistence behavior with tests.
-4. Add Resume Capsule, Safety Gate, and session-planning interactions.
-5. Apply the game-reactive visual identity, responsive density, purposeful motion, reduced-motion behavior, and readable time presentation.
-6. Add grounded retrieval, evaluation, deterministic fallback behavior, and a local inference adapter.
-7. Consider Portable Completion Packs and real-data ingestion only after Hunt Memory and grounded Oracle behavior are reliable.
+4. Define the bundled Completion Pack location, route, edition, evidence, and spoiler contract.
+5. Author the validated Dark Souls II pilot pack and build Area Sweep, progressive route guidance, and schematic maps.
+6. Apply the game-reactive visual identity, responsive density, purposeful motion, reduced-motion behavior, and readable time presentation.
+7. Validate the full supported platinum route during a real Dark Souls II run and release V1.
+8. After V1, add Resume Capsule, Safety Gate, and session-planning interactions.
+9. Add grounded retrieval, evaluation, deterministic fallback behavior, and a local inference adapter.
+10. Consider user-imported Completion Packs and read-only platform ingestion.
 
 The visual overhaul follows the signature feature contracts so the interface is built around concrete user workflows.
 
@@ -110,15 +123,24 @@ The current codebase is a working local foundation using bundled demo data.
 - Game-specific accent theme colors.
 - Read-only protection for unsupported saved-data versions and session-only behavior when browser storage is unavailable.
 
-### Planned for Future Releases
+### Required Before V1 Is Complete
 
-- Hunt Memory runtime features: Run Ledger, Honest Counters, Resume Capsule, and Safety Gate (the Schema 3.0 data contract is defined; runtime implementation remains planned).
+- Hunt Memory runtime features required by the pilot: Run Ledger and Honest Counters (the Schema 3.0 data contract is defined; runtime implementation remains planned).
+- One bundled, validated Dark Souls II: Scholar of the First Sin PlayStation Completion Pack for a confirmed edition and game version.
+- Manual area and bonfire selection, Area Sweep, Hint/Route/Exact guidance, and evidence-backed availability reasons.
+- Original schematic area maps with validated markers for achievement-relevant pilot objectives.
+- Responsive game-reactive styling, accessible motion, reduced-motion behavior, and readable time presentation.
+- A real-playthrough validation showing that the owner can plan and finish the supported platinum route.
+
+### Planned After V1
+
+- Resume Capsule and Safety Gate as separate Hunt Memory workflows. V1 still presents authored missable and point-of-no-return warnings through the roadmap, Area Sweep, and route cards.
 - Tonight Mode session planning.
 - Selectable Completion Targets (Platinum, 100%, All DLC).
 - Oracle Receipts with explicit constraint records.
 - Grounded retrieval, inference-backed questions and answers, citation validation, and AI Lab evaluation views.
 - A local inference adapter.
-- Portable Completion Packs and custom dataset imports.
+- User-imported Completion Packs, custom datasets, permitted map layers, and platform imports.
 
 ### Explicit Non-Goals
 
@@ -136,4 +158,8 @@ The run ledger storage schema, certainty arithmetic rules, and Schema 2.0 to 3.0
 
 1. **Completion Target Partitioning / DLC Grouping:** How base-game achievements and DLC packs are separated, indexed, and evaluated without violating platform-specific reward definitions.
 2. **Tonight Mode Effort:** Which structured effort ranges, buckets, provenance rules, and estimation behavior can support approximate planning without false precision.
-3. **Completion Pack Trust:** Which validation, provenance, integrity, trust, and verification mechanisms safely handle untrusted local files.
+3. **Bundled Completion Pack Contract:** The exact schema for release region, edition, game version, source provenance, last verification, areas, checkpoints, route cards, availability conditions, spoiler levels, and schematic markers.
+4. **Guide State Ownership:** How run-local area, checkpoint, reveal level, and Save For Later state persist without allowing navigation changes to evict the one-step progress undo snapshot.
+5. **Schema 3.0 Cutover Recovery:** Which backup, rollback, and stale-tab behavior protects existing local progress before the same-key migration is activated.
+6. **Schematic Map Representation:** The smallest accessible data and rendering format that supports original per-area diagrams, stable marker IDs, text equivalents, and measured bundle limits.
+7. **Completion Pack Trust:** Which validation, provenance, integrity, trust, and verification mechanisms safely handle future untrusted local files.
