@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { RESERVED_RECORD_KEY_MESSAGE } from './progress-schema-common';
 import { transformProgressStoreV2ToV3 } from './progress-migration';
 import { LocalProgressStoreSchema } from './progress-schema';
+import type { AchievementProgress } from './progress-schema';
 
 const MIGRATION_TS = '2026-07-23T00:00:00.000Z';
 
@@ -690,5 +692,236 @@ describe('pure Schema 2.0 to 3.0 migration', () => {
     const first = transformProgressStoreV2ToV3(source, MIGRATION_TS);
     const second = transformProgressStoreV2ToV3(source, MIGRATION_TS);
     expect(second).toEqual(first);
+  });
+
+  it('rejects an own reserved key at every persisted V2 map level as INVALID_SOURCE_STORE without a partial store', () => {
+    const validAchievementProgress = (
+      achievementId: string,
+    ): AchievementProgress => ({
+      achievementId,
+      completed: false,
+      manualOverride: false,
+      lastUpdated: '2026-07-22T00:00:00.000Z',
+      provenance: 'manual',
+    });
+
+    const cases: {
+      name: string;
+      mutate: (source: unknown) => void;
+      expectedPath: string;
+    }[] = [
+      {
+        name: 'gameProgress',
+        mutate: (source) => {
+          (source as { gameProgress: unknown }).gameProgress = JSON.parse(
+            '{"__proto__": {}}',
+          );
+        },
+        expectedPath: 'gameProgress.__proto__',
+      },
+      {
+        name: 'sets',
+        mutate: (source) => {
+          (
+            source as {
+              gameProgress: {
+                'game-b': { sets: unknown };
+              };
+            }
+          ).gameProgress['game-b'].sets = JSON.parse('{"__proto__": {}}');
+        },
+        expectedPath: 'gameProgress.game-b.sets.__proto__',
+      },
+      {
+        name: 'progress',
+        mutate: (source) => {
+          (
+            source as {
+              gameProgress: {
+                'game-b': {
+                  sets: {
+                    'set-b': { progress: unknown };
+                  };
+                };
+              };
+            }
+          ).gameProgress['game-b'].sets['set-b'].progress = JSON.parse(
+            '{"__proto__": ' +
+              JSON.stringify(validAchievementProgress('__proto__')) +
+              '}',
+          );
+        },
+        expectedPath: 'gameProgress.game-b.sets.set-b.progress.__proto__',
+      },
+      {
+        name: 'checklistCompletion',
+        mutate: (source) => {
+          (
+            source as {
+              gameProgress: {
+                'game-b': {
+                  sets: {
+                    'set-b': {
+                      progress: {
+                        'ach-checklist': { checklistCompletion: unknown };
+                      };
+                    };
+                  };
+                };
+              };
+            }
+          ).gameProgress['game-b'].sets['set-b'].progress[
+            'ach-checklist'
+          ].checklistCompletion = JSON.parse('{"__proto__": true}');
+        },
+        expectedPath:
+          'gameProgress.game-b.sets.set-b.progress.ach-checklist.checklistCompletion.__proto__',
+      },
+      {
+        name: 'orphanedProgress outer',
+        mutate: (source) => {
+          (
+            source as {
+              gameProgress: {
+                'game-b': { orphanedProgress: unknown };
+              };
+            }
+          ).gameProgress['game-b'].orphanedProgress = JSON.parse(
+            '{"__proto__": {}}',
+          );
+        },
+        expectedPath: 'gameProgress.game-b.orphanedProgress.__proto__',
+      },
+      {
+        name: 'orphanedProgress inner',
+        mutate: (source) => {
+          (
+            source as {
+              gameProgress: {
+                'game-b': { orphanedProgress: Record<string, unknown> };
+              };
+            }
+          ).gameProgress['game-b'].orphanedProgress = {
+            'set-old': JSON.parse(
+              '{"__proto__": ' +
+                JSON.stringify({
+                  ...validAchievementProgress('__proto__'),
+                  trackingModeAtRemoval: 'binary',
+                }) +
+                '}',
+            ),
+          };
+        },
+        expectedPath:
+          'gameProgress.game-b.orphanedProgress.set-old.__proto__',
+      },
+      {
+        name: 'undoState',
+        mutate: (source) => {
+          (source as { undoState: unknown }).undoState = JSON.parse(
+            '{"__proto__": {}}',
+          );
+        },
+        expectedPath: 'undoState.__proto__',
+      },
+    ];
+
+    for (const testCase of cases) {
+      const source = structuredClone(createV2Store());
+      testCase.mutate(source);
+      const before = structuredClone(source);
+
+      const result = transformProgressStoreV2ToV3(source, MIGRATION_TS);
+      expect(result.success, testCase.name).toBe(false);
+      if (!result.success) {
+        expect(result.code, testCase.name).toBe('INVALID_SOURCE_STORE');
+        expect('store' in result, testCase.name).toBe(false);
+        expect(
+          result.conflicts.some((conflict) =>
+            conflict.includes(RESERVED_RECORD_KEY_MESSAGE),
+          ),
+          testCase.name,
+        ).toBe(true);
+        expect(
+          result.conflicts.some((conflict) =>
+            conflict.startsWith(testCase.expectedPath),
+          ),
+          testCase.name,
+        ).toBe(true);
+      }
+      expect(source, testCase.name).toEqual(before);
+    }
+  });
+
+  it('migrates valid constructor and toString IDs without changing report shape', () => {
+    const source = createV2Store() as {
+      gameProgress: Record<
+        string,
+        {
+          gameId: string;
+          preferredSetId?: string;
+          sets: Record<
+            string,
+            {
+              setId: string;
+              version: string;
+              pinnedAchievementIds: string[];
+              progress: Record<string, unknown>;
+            }
+          >;
+          orphanedProgress: Record<string, Record<string, unknown>>;
+        }
+      >;
+    };
+    source.gameProgress['constructor'] = {
+      gameId: 'constructor',
+      sets: {
+        toString: {
+          setId: 'toString',
+          version: '1.0',
+          pinnedAchievementIds: [],
+          progress: {},
+        },
+      },
+      orphanedProgress: {},
+    };
+    source.gameProgress['game-a'].orphanedProgress['toString'] = {
+      constructor: {
+        achievementId: 'constructor',
+        completed: false,
+        manualOverride: false,
+        lastUpdated: '2026-07-22T06:00:00.000Z',
+        provenance: 'manual',
+        trackingModeAtRemoval: 'binary',
+      },
+    };
+
+    const result = transformProgressStoreV2ToV3(source, MIGRATION_TS);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.store.gameProgress['constructor']).toBeDefined();
+    expect(
+      result.store.gameProgress['constructor'].sets['toString'],
+    ).toBeDefined();
+    expect(
+      result.store.gameProgress['constructor'].sets['toString'].runs[
+        'legacy-v2'
+      ],
+    ).toBeDefined();
+    expect(
+      result.store.gameProgress['game-a'].retiredSets['toString'],
+    ).toBeDefined();
+    expect(result.report.migratedGameIds).toContain('constructor');
+    expect(result.report.migratedSets).toContainEqual({
+      gameId: 'constructor',
+      setId: 'toString',
+      destination: 'active',
+    });
+    expect(result.report.migratedSets).toContainEqual({
+      gameId: 'game-a',
+      setId: 'toString',
+      destination: 'retired',
+    });
   });
 });

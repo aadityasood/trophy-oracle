@@ -275,7 +275,7 @@ export function transformProgressStoreV2ToV3(
     }
 
     for (const setId of sortedKeys(game.orphanedProgress)) {
-      if (game.sets[setId]) continue;
+      if (Object.hasOwn(game.sets, setId)) continue;
       const orphanMap = game.orphanedProgress[setId];
       const run = buildAbsentSetRun(orphanMap, gameId, setId);
       v3Game.retiredSets[setId] = {

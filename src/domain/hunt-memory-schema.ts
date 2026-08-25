@@ -1,9 +1,11 @@
 import { z, type RefinementCtx } from 'zod';
 import {
   NonBlankStringSchema,
+  PersistedRecordKeySchema,
   ProgressProvenanceSchema,
   distinctNonBlankIds,
   isIsoUtcString,
+  safeRecord,
 } from './progress-schema-common';
 
 export const HUNT_MEMORY_STORE_SCHEMA_VERSION = '3.0';
@@ -76,13 +78,11 @@ function refineAchievementProgressV3(
 }
 
 const AchievementProgressV3Fields = {
-  achievementId: NonBlankStringSchema,
+  achievementId: PersistedRecordKeySchema,
   completed: z.boolean(),
   manualOverride: z.boolean(),
   counter: CounterProgressSchema.optional(),
-  checklistCompletion: z
-    .record(NonBlankStringSchema, z.boolean())
-    .optional(),
+  checklistCompletion: safeRecord(z.boolean()).optional(),
   notes: z.string().optional(),
   lastUpdated: IsoUtcTimestampSchema,
   provenance: ProgressProvenanceSchema,
@@ -161,7 +161,7 @@ function refineRunProgress(value: RunProgressLike, ctx: IssueSink): void {
     }
   });
   value.pinnedAchievementIds.forEach((achievementId, index) => {
-    if (!value.progress[achievementId]) {
+    if (!Object.hasOwn(value.progress, achievementId)) {
       ctx.addIssue({
         code: 'custom',
         message: `Pinned achievement '${achievementId}' does not exist in active progress`,
@@ -184,14 +184,13 @@ function refineRunProgress(value: RunProgressLike, ctx: IssueSink): void {
 
 export const RunProgressSchema = z
   .strictObject({
-    runId: NonBlankStringSchema,
+    runId: PersistedRecordKeySchema,
     name: NonBlankStringSchema,
     createdAt: IsoUtcTimestampSchema,
     activeStage: z.enum(['story', 'missables', 'cleanup']).optional(),
     pinnedAchievementIds: distinctNonBlankIds.max(5),
-    progress: z.record(NonBlankStringSchema, AchievementProgressV3Schema),
-    orphanedProgress: z.record(
-      NonBlankStringSchema,
+    progress: safeRecord(AchievementProgressV3Schema),
+    orphanedProgress: safeRecord(
       z.array(OrphanedAchievementProgressV3Schema).min(1),
     ),
   })
@@ -213,7 +212,7 @@ function refineRunLedger(value: RunLedgerLike, ctx: IssueSink): void {
       });
     }
   });
-  if (!value.runs[value.activeRunId]) {
+  if (!Object.hasOwn(value.runs, value.activeRunId)) {
     ctx.addIssue({
       code: 'custom',
       message: `activeRunId '${value.activeRunId}' does not reference a run in this set`,
@@ -223,9 +222,9 @@ function refineRunLedger(value: RunLedgerLike, ctx: IssueSink): void {
 }
 
 const RunLedgerFields = {
-  setId: NonBlankStringSchema,
+  setId: PersistedRecordKeySchema,
   activeRunId: NonBlankStringSchema,
-  runs: z.record(NonBlankStringSchema, RunProgressSchema),
+  runs: safeRecord(RunProgressSchema),
 };
 
 export const RunLedgerSetV3Schema = z
@@ -285,7 +284,10 @@ function refineGameProgressV3(value: GameProgressV3Like, ctx: IssueSink): void {
       });
     }
   });
-  if (value.preferredSetId !== undefined && !value.sets[value.preferredSetId]) {
+  if (
+    value.preferredSetId !== undefined &&
+    !Object.hasOwn(value.sets, value.preferredSetId)
+  ) {
     ctx.addIssue({
       code: 'custom',
       message: `preferredSetId '${value.preferredSetId}' does not exist in active sets`,
@@ -293,7 +295,7 @@ function refineGameProgressV3(value: GameProgressV3Like, ctx: IssueSink): void {
     });
   }
   Object.keys(value.sets).forEach((setId) => {
-    if (value.retiredSets[setId]) {
+    if (Object.hasOwn(value.retiredSets, setId)) {
       ctx.addIssue({
         code: 'custom',
         message: `Set '${setId}' cannot be both active and retired`,
@@ -305,13 +307,10 @@ function refineGameProgressV3(value: GameProgressV3Like, ctx: IssueSink): void {
 
 export const GameProgressV3Schema = z
   .strictObject({
-    gameId: NonBlankStringSchema,
+    gameId: PersistedRecordKeySchema,
     preferredSetId: NonBlankStringSchema.optional(),
-    sets: z.record(NonBlankStringSchema, AchievementSetProgressV3Schema),
-    retiredSets: z.record(
-      NonBlankStringSchema,
-      RetiredAchievementSetProgressV3Schema,
-    ),
+    sets: safeRecord(AchievementSetProgressV3Schema),
+    retiredSets: safeRecord(RetiredAchievementSetProgressV3Schema),
   })
   .superRefine(refineGameProgressV3);
 export type GameProgressV3 = z.infer<typeof GameProgressV3Schema>;
@@ -333,8 +332,8 @@ function refineUndoSnapshotV3(value: UndoSnapshotV3Like, ctx: IssueSink): void {
 
 export const ProgressUndoSnapshotV3Schema = z
   .strictObject({
-    setId: NonBlankStringSchema,
-    runId: NonBlankStringSchema,
+    setId: PersistedRecordKeySchema,
+    runId: PersistedRecordKeySchema,
     guardedSetVersion: NonBlankStringSchema,
     previous: RunProgressSchema,
   })
@@ -362,7 +361,10 @@ function refineLocalProgressStoreV3(
       });
     }
   });
-  if (value.lastGameId !== undefined && !value.gameProgress[value.lastGameId]) {
+  if (
+    value.lastGameId !== undefined &&
+    !Object.hasOwn(value.gameProgress, value.lastGameId)
+  ) {
     ctx.addIssue({
       code: 'custom',
       message: `lastGameId '${value.lastGameId}' does not exist in gameProgress`,
@@ -370,7 +372,7 @@ function refineLocalProgressStoreV3(
     });
   }
   Object.keys(value.undoState ?? {}).forEach((gameId) => {
-    if (!value.gameProgress[gameId]) {
+    if (!Object.hasOwn(value.gameProgress, gameId)) {
       ctx.addIssue({
         code: 'custom',
         message: `Undo state key '${gameId}' does not exist in gameProgress`,
@@ -384,10 +386,8 @@ export const LocalProgressStoreV3Schema = z
   .strictObject({
     schemaVersion: z.literal(HUNT_MEMORY_STORE_SCHEMA_VERSION),
     lastGameId: NonBlankStringSchema.optional(),
-    gameProgress: z.record(NonBlankStringSchema, GameProgressV3Schema),
-    undoState: z
-      .record(NonBlankStringSchema, ProgressUndoSnapshotV3Schema)
-      .optional(),
+    gameProgress: safeRecord(GameProgressV3Schema),
+    undoState: safeRecord(ProgressUndoSnapshotV3Schema).optional(),
   })
   .superRefine(refineLocalProgressStoreV3);
 export type LocalProgressStoreV3 = z.infer<typeof LocalProgressStoreV3Schema>;

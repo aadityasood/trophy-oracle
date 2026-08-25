@@ -66,7 +66,7 @@ The AI model remains strictly read-only; it can suggest or recommend progress up
 
 ## Model Runtime
 
-V1 should support a local model through an adapter. Ollama is the recommended first runtime because it is easy to install and exposes a local HTTP API. The app should not hard-code business logic to Ollama.
+Local-model inference is planned after the deterministic V1 pilot. Ollama is the recommended first runtime to evaluate because it exposes a local HTTP API, but the app must not hard-code business logic to Ollama.
 
 Adapter responsibilities:
 
