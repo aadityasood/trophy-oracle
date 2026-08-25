@@ -531,11 +531,11 @@ describe('hunt memory lifecycle', () => {
     expect(store).toEqual(before);
   });
 
-  it('creates and selects owned prototype-sensitive run IDs without prototype mutation', () => {
+  it('creates and selects owned constructor and toString run IDs without prototype mutation', () => {
     let store = createPopulatedStore();
     const unrelatedObject = {};
 
-    for (const runId of PROTOTYPE_SENSITIVE_IDS) {
+    for (const runId of ['constructor', 'toString'] as const) {
       const before = structuredClone(store);
       const previousRunIds = Object.keys(
         store.gameProgress['game-a'].sets['set-a'].runs,
@@ -623,6 +623,31 @@ describe('hunt memory lifecycle', () => {
     expect('runId' in unrelatedObject).toBe(false);
     expect('name' in unrelatedObject).toBe(false);
     expect('createdAt' in unrelatedObject).toBe(false);
+  });
+
+  it('returns INVALID_RUN_ID for the reserved run ID without mutation, store leak, or prototype pollution', () => {
+    const store = createPopulatedStore();
+    const before = structuredClone(store);
+    const unrelatedObject = {};
+
+    const result = createRun(
+      store,
+      GAME_A,
+      'set-a',
+      '__proto__',
+      'Reserved Run',
+      TS2,
+    );
+
+    expect(result).toEqual({
+      success: false,
+      code: 'INVALID_RUN_ID',
+      message: "Run ID '__proto__' is reserved and cannot be used",
+    });
+    expect('store' in result).toBe(false);
+    expect(store).toEqual(before);
+    expect(Object.getPrototypeOf(unrelatedObject)).toBe(Object.prototype);
+    expect('runId' in unrelatedObject).toBe(false);
   });
 
   it('switches the active run changing only activeRunId and preserving undo and all other state', () => {
@@ -718,6 +743,9 @@ describe('hunt memory lifecycle', () => {
     expect(() =>
       createDefaultRunProgress(SET_A, '   ', 'Direct Run', TS),
     ).toThrowError('Run ID must contain at least one non-whitespace character');
+    expect(() =>
+      createDefaultRunProgress(SET_A, '__proto__', 'Direct Run', TS),
+    ).toThrowError("Run ID '__proto__' is reserved and cannot be used");
     expect(() =>
       createDefaultRunProgress(SET_A, 'direct-run', '   ', TS),
     ).toThrowError('Run name must contain at least one non-whitespace character');

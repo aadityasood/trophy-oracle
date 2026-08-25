@@ -11,7 +11,11 @@ import type {
   LocalProgressStoreV3,
   RunProgress,
 } from './hunt-memory-schema';
-import { isIsoUtcString } from './progress-schema-common';
+import {
+  RESERVED_RECORD_KEY,
+  isIsoUtcString,
+  isReservedRecordKey,
+} from './progress-schema-common';
 
 export const DEFAULT_HUNT_MEMORY_RUN_ID = 'default-run';
 export const DEFAULT_HUNT_MEMORY_RUN_NAME = 'Main Run';
@@ -94,6 +98,11 @@ export function createDefaultRunProgress(
   if (!isNonBlank(runId)) {
     throw new Error('Run ID must contain at least one non-whitespace character');
   }
+  if (isReservedRecordKey(runId)) {
+    throw new Error(
+      `Run ID '${RESERVED_RECORD_KEY}' is reserved and cannot be used`,
+    );
+  }
   if (!isNonBlank(name)) {
     throw new Error('Run name must contain at least one non-whitespace character');
   }
@@ -166,6 +175,14 @@ export function createRun(
       success: false,
       code: 'INVALID_RUN_ID',
       message: 'Run ID must contain at least one non-whitespace character',
+    };
+  }
+
+  if (isReservedRecordKey(runId)) {
+    return {
+      success: false,
+      code: 'INVALID_RUN_ID',
+      message: `Run ID '${RESERVED_RECORD_KEY}' is reserved and cannot be used`,
     };
   }
 
