@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import rawDemoGames from '../../data/source-of-truth/demo-games.json';
+import { RESERVED_RECORD_KEY } from './progress-schema-common';
 import { validateDemoGamesDataset } from './achievement-schema';
 import type { DemoGamesDataset } from './achievement-schema';
 
@@ -215,5 +216,83 @@ describe('Achievement schema and trusted dataset validation', () => {
     invalid.games[0].achievementSets[0].achievements[0].evidence = '   ';
 
     expectInvalid(invalid, 'non-whitespace');
+  });
+
+  it('rejects the exact reserved string as a game, set, achievement, or checklist-item ID', () => {
+    const gameIdInvalid = getValidDataset();
+    gameIdInvalid.games[0].id = RESERVED_RECORD_KEY;
+    expectInvalid(gameIdInvalid, 'Dataset IDs cannot use the reserved string');
+    const gameResult = validateDemoGamesDataset(gameIdInvalid);
+    if (!gameResult.success) {
+      expect(gameResult.error).toContain(`games.0.id`);
+    }
+
+    const setIdInvalid = getValidDataset();
+    setIdInvalid.games[0].achievementSets[0].id = RESERVED_RECORD_KEY;
+    expectInvalid(setIdInvalid, 'Dataset IDs cannot use the reserved string');
+    const setResult = validateDemoGamesDataset(setIdInvalid);
+    if (!setResult.success) {
+      expect(setResult.error).toContain(
+        `games.0.achievementSets.0.id`,
+      );
+    }
+
+    const achievementIdInvalid = getValidDataset();
+    achievementIdInvalid.games[0].achievementSets[0].achievements[0].id =
+      RESERVED_RECORD_KEY;
+    expectInvalid(
+      achievementIdInvalid,
+      'Dataset IDs cannot use the reserved string',
+    );
+    const achievementResult = validateDemoGamesDataset(achievementIdInvalid);
+    if (!achievementResult.success) {
+      expect(achievementResult.error).toContain(
+        `games.0.achievementSets.0.achievements.0.id`,
+      );
+    }
+
+    const checklistIdInvalid = getValidDataset();
+    const checklistTracking =
+      checklistIdInvalid.games[1].achievementSets[0].achievements[2].tracking;
+    if (checklistTracking.mode !== 'checklist') {
+      throw new Error('Expected checklist fixture');
+    }
+    checklistTracking.items[0].id = RESERVED_RECORD_KEY;
+    expectInvalid(
+      checklistIdInvalid,
+      'Dataset IDs cannot use the reserved string',
+    );
+    const checklistResult = validateDemoGamesDataset(checklistIdInvalid);
+    if (!checklistResult.success) {
+      expect(checklistResult.error).toContain(
+        `games.1.achievementSets.0.achievements.2.tracking.items.0.id`,
+      );
+    }
+  });
+
+  it('accepts constructor and toString as dataset IDs when uniqueness and references remain valid', () => {
+    const dataset = getValidDataset();
+    dataset.games[0].id = 'constructor';
+    const renamedSet = dataset.games[0].achievementSets[0];
+    renamedSet.id = 'toString';
+    const originalAchievementId = renamedSet.achievements[0].id;
+    renamedSet.achievements[0].id = 'constructor';
+    for (const achievement of renamedSet.achievements) {
+      achievement.prerequisites = achievement.prerequisites.map(
+        (prerequisiteId) =>
+          prerequisiteId === originalAchievementId
+            ? 'constructor'
+            : prerequisiteId,
+      );
+    }
+    const checklistTracking = dataset.games[1].achievementSets[0].achievements[2]
+      .tracking;
+    if (checklistTracking.mode !== 'checklist') {
+      throw new Error('Expected checklist fixture');
+    }
+    checklistTracking.items[0].id = 'toString';
+
+    const result = validateDemoGamesDataset(dataset);
+    expect(result.success).toBe(true);
   });
 });

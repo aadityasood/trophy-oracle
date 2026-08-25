@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryStorage } from '../test/memory-storage';
 import { transformProgressStoreV2ToV3 } from '../domain/progress-migration';
+import { RESERVED_RECORD_KEY_MESSAGE } from '../domain/progress-schema-common';
 import {
   HUNT_MEMORY_STORAGE_KEY,
   createDefaultHuntMemoryStore,
@@ -374,5 +375,41 @@ describe('Schema 3.0 hunt memory storage gateway', () => {
     expect(storage.getRawValue(customKey)).not.toBeNull();
     expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBeNull();
     expect(storage.getRawValue(HUNT_MEMORY_STORAGE_KEY)).toBeNull();
+  });
+
+  it('returns INVALID_SOURCE_STORE for hostile V2 JSON with a reserved map key and performs zero writes', () => {
+    const storage = new MemoryStorage();
+    const raw =
+      '{"schemaVersion":"2.0","gameProgress":{"__proto__":{"gameId":"__proto__","sets":{},"orphanedProgress":{}}}}';
+    storage.seed(HUNT_MEMORY_STORAGE_KEY, raw);
+
+    const result = loadOrMigrateHuntMemoryProgress(storage, MIGRATION_TS);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+
+    expect(result.code).toBe('INVALID_SOURCE_STORE');
+    expect('store' in result).toBe(false);
+    expect(result.conflicts.some((c) => c.includes(RESERVED_RECORD_KEY_MESSAGE)))
+      .toBe(true);
+    expect(storage.getRawValue(HUNT_MEMORY_STORAGE_KEY)).toBe(raw);
+    expect(storage.writeCount).toBe(0);
+  });
+
+  it('returns INVALID_SOURCE_STORE for hostile V3 JSON with a reserved map key and performs zero writes', () => {
+    const storage = new MemoryStorage();
+    const raw =
+      '{"schemaVersion":"3.0","gameProgress":{"__proto__":{"gameId":"__proto__","sets":{},"retiredSets":{}}}}';
+    storage.seed(HUNT_MEMORY_STORAGE_KEY, raw);
+
+    const result = loadOrMigrateHuntMemoryProgress(storage, MIGRATION_TS);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+
+    expect(result.code).toBe('INVALID_SOURCE_STORE');
+    expect('store' in result).toBe(false);
+    expect(result.conflicts.some((c) => c.includes(RESERVED_RECORD_KEY_MESSAGE)))
+      .toBe(true);
+    expect(storage.getRawValue(HUNT_MEMORY_STORAGE_KEY)).toBe(raw);
+    expect(storage.writeCount).toBe(0);
   });
 });

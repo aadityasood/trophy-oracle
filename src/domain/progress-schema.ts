@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import {
   NonBlankStringSchema,
+  PersistedRecordKeySchema,
   ProgressProvenanceSchema,
   distinctNonBlankIds,
   isIsoUtcString,
+  safeRecord,
 } from './progress-schema-common';
 
 export {
@@ -17,13 +19,11 @@ export type { ProgressProvenance } from './progress-schema-common';
 export const CURRENT_STORE_SCHEMA_VERSION = '2.0';
 
 export const AchievementProgressSchema = z.strictObject({
-  achievementId: NonBlankStringSchema,
+  achievementId: PersistedRecordKeySchema,
   completed: z.boolean(),
   manualOverride: z.boolean(),
   counterValue: z.number().int().nonnegative().optional(),
-  checklistCompletion: z
-    .record(NonBlankStringSchema, z.boolean())
-    .optional(),
+  checklistCompletion: safeRecord(z.boolean()).optional(),
   notes: z.string().optional(),
   lastUpdated: z.string().refine(isIsoUtcString, {
     message: 'lastUpdated must be a valid ISO-8601 UTC timestamp',
@@ -85,11 +85,11 @@ export type OrphanedAchievementProgress = z.infer<
 
 export const AchievementSetProgressSchema = z
   .strictObject({
-    setId: NonBlankStringSchema,
+    setId: PersistedRecordKeySchema,
     version: NonBlankStringSchema,
     activeStage: z.enum(['story', 'missables', 'cleanup']).optional(),
     pinnedAchievementIds: distinctNonBlankIds.max(5),
-    progress: z.record(NonBlankStringSchema, AchievementProgressSchema),
+    progress: safeRecord(AchievementProgressSchema),
   })
   .superRefine((setProgress, ctx) => {
     Object.entries(setProgress.progress).forEach(([achievementId, progress]) => {
@@ -103,7 +103,7 @@ export const AchievementSetProgressSchema = z
     });
 
     setProgress.pinnedAchievementIds.forEach((achievementId, index) => {
-      if (!setProgress.progress[achievementId]) {
+      if (!Object.hasOwn(setProgress.progress, achievementId)) {
         ctx.addIssue({
           code: 'custom',
           message: `Pinned achievement '${achievementId}' does not exist in active progress`,
@@ -118,12 +118,11 @@ export type AchievementSetProgress = z.infer<
 
 export const GameProgressSchema = z
   .strictObject({
-    gameId: NonBlankStringSchema,
+    gameId: PersistedRecordKeySchema,
     preferredSetId: NonBlankStringSchema.optional(),
-    sets: z.record(NonBlankStringSchema, AchievementSetProgressSchema),
-    orphanedProgress: z.record(
-      NonBlankStringSchema,
-      z.record(NonBlankStringSchema, OrphanedAchievementProgressSchema),
+    sets: safeRecord(AchievementSetProgressSchema),
+    orphanedProgress: safeRecord(
+      safeRecord(OrphanedAchievementProgressSchema),
     ),
   })
   .superRefine((gameProgress, ctx) => {
@@ -139,7 +138,7 @@ export const GameProgressSchema = z
 
     if (
       gameProgress.preferredSetId !== undefined &&
-      !gameProgress.sets[gameProgress.preferredSetId]
+      !Object.hasOwn(gameProgress.sets, gameProgress.preferredSetId)
     ) {
       ctx.addIssue({
         code: 'custom',
@@ -166,7 +165,7 @@ export type GameProgress = z.infer<typeof GameProgressSchema>;
 
 export const ProgressUndoSnapshotSchema = z
   .strictObject({
-    setId: NonBlankStringSchema,
+    setId: PersistedRecordKeySchema,
     previous: AchievementSetProgressSchema,
   })
   .superRefine((snapshot, ctx) => {
@@ -184,10 +183,8 @@ export const LocalProgressStoreSchema = z
   .strictObject({
     schemaVersion: NonBlankStringSchema,
     lastGameId: NonBlankStringSchema.optional(),
-    gameProgress: z.record(NonBlankStringSchema, GameProgressSchema),
-    undoState: z
-      .record(NonBlankStringSchema, ProgressUndoSnapshotSchema)
-      .optional(),
+    gameProgress: safeRecord(GameProgressSchema),
+    undoState: safeRecord(ProgressUndoSnapshotSchema).optional(),
   })
   .superRefine((store, ctx) => {
     if (store.schemaVersion !== CURRENT_STORE_SCHEMA_VERSION) {
@@ -208,7 +205,10 @@ export const LocalProgressStoreSchema = z
       }
     });
 
-    if (store.lastGameId !== undefined && !store.gameProgress[store.lastGameId]) {
+    if (
+      store.lastGameId !== undefined &&
+      !Object.hasOwn(store.gameProgress, store.lastGameId)
+    ) {
       ctx.addIssue({
         code: 'custom',
         message: `lastGameId '${store.lastGameId}' does not exist in gameProgress`,
@@ -217,8 +217,7 @@ export const LocalProgressStoreSchema = z
     }
 
     Object.entries(store.undoState ?? {}).forEach(([gameId]) => {
-      const gameProgress = store.gameProgress[gameId];
-      if (!gameProgress) {
+      if (!Object.hasOwn(store.gameProgress, gameId)) {
         ctx.addIssue({
           code: 'custom',
           message: `Undo state key '${gameId}' does not exist in gameProgress`,

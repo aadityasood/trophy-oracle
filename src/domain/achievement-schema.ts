@@ -1,8 +1,19 @@
 import { z } from 'zod';
+import {
+  RESERVED_RECORD_KEY,
+  isReservedRecordKey,
+} from './progress-schema-common';
 
 const NonBlankStringSchema = z.string().refine(
   (value) => value.trim().length > 0,
   { message: 'Must contain at least one non-whitespace character' },
+);
+
+const DatasetIdSchema = NonBlankStringSchema.refine(
+  (value) => !isReservedRecordKey(value),
+  {
+    message: `Dataset IDs cannot use the reserved string '${RESERVED_RECORD_KEY}'`,
+  },
 );
 
 export const PlatformIdSchema = z.enum([
@@ -31,7 +42,7 @@ export const PlatformRewardSchema = z.discriminatedUnion('type', [
 export type PlatformReward = z.infer<typeof PlatformRewardSchema>;
 
 export const ChecklistItemDefinitionSchema = z.strictObject({
-  id: NonBlankStringSchema,
+  id: DatasetIdSchema,
   name: NonBlankStringSchema,
 });
 
@@ -90,7 +101,7 @@ export const AchievementLabelSchema = z.enum([
 export type AchievementLabel = z.infer<typeof AchievementLabelSchema>;
 
 export const AchievementRecordSchema = z.strictObject({
-  id: NonBlankStringSchema,
+  id: DatasetIdSchema,
   name: NonBlankStringSchema,
   description: NonBlankStringSchema,
   evidence: NonBlankStringSchema,
@@ -109,7 +120,7 @@ export const AchievementRecordSchema = z.strictObject({
 export type AchievementRecord = z.infer<typeof AchievementRecordSchema>;
 
 export const AchievementSetSchema = z.strictObject({
-  id: NonBlankStringSchema,
+  id: DatasetIdSchema,
   platform: PlatformIdSchema,
   edition: NonBlankStringSchema.optional(),
   platformGameId: NonBlankStringSchema.optional(),
@@ -129,7 +140,7 @@ export const GameThemeSchema = z.strictObject({
 export type GameTheme = z.infer<typeof GameThemeSchema>;
 
 export const GameRecordSchema = z.strictObject({
-  id: NonBlankStringSchema,
+  id: DatasetIdSchema,
   title: NonBlankStringSchema,
   aliases: z.array(NonBlankStringSchema),
   sourceType: z.enum(['fictional_demo', 'imported', 'scraped', 'manual']),
