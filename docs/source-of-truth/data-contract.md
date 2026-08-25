@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The data contract defines the source of truth for Trophy Oracle v1. The AI pipeline treats these files as trusted evidence and avoids claims outside them.
+The data contract defines the source of truth for Trophy Oracle V1. The AI pipeline treats these files as trusted evidence and avoids claims outside them.
 
 ## Game Record
 
@@ -108,6 +108,7 @@ type AchievementLabel =
 ## Dataset Validation Invariants
 
 - Game IDs and achievement-set IDs are nonempty and unique across the dataset. Achievement IDs are nonempty and unique within their set; checklist item IDs are nonempty, stable, and unique within their checklist.
+- The exact string `__proto__` is reserved and must not be used as a game ID, achievement-set ID, achievement ID, or checklist item ID. These identifiers become persisted object-record keys. Every other nonblank string, including inherited Object prototype member names such as `constructor` and `toString`, remains a valid identifier.
 - Two editions on the same platform remain separate sets. They require distinct set IDs and edition values that disambiguate them, and must never be merged by `platform`, `platformGameId`, or `crossPlatformGroupId`.
 - PlayStation records use trophy rewards, Xbox records use gamerscore rewards, and Steam records use generic achievement rewards. Gamerscore points are positive integers.
 - Counter `unit` is nonempty after trimming. `target`, when present, is a positive integer. `quickSteps`, when present, is a nonempty array of distinct positive integers; a one-element array is valid.
@@ -168,6 +169,7 @@ type LocalProgressStore = {
 ## Manual Progress Rules (Current Runtime: Schema 2.0)
 
 - **Set Identity**: Map keys must match their embedded `gameId`, `setId`, and `achievementId`. `preferredSetId`, every set-progress key, every pin, and every progress entry must reference the same game and set hierarchy.
+- **Persisted Map Keys**: Map keys in `gameProgress`, `undoState`, `sets`, `orphanedProgress`, `progress`, and `checklistCompletion` may be any nonblank string except the exact reserved string `__proto__`. Schema 2.0 validation rejects a store containing a reserved map key with a typed issue at that map's path instead of silently dropping it. All other nonblank strings, including `constructor` and `toString`, remain valid keys, and relationship checks use own-property semantics.
 - **Restoration**: `lastGameId` restores the most recent game, `preferredSetId` restores that game's selected achievement set, and `activeStage` restores that set's roadmap stage. Invalid or deleted references are cleared during reconciliation rather than redirected to another platform or edition.
 - **Tracker Values**: `counterValue` is present only for counter tracking and is a nonnegative integer. `checklistCompletion` is present only for checklist tracking and contains only current checklist item IDs. Binary tracking has no tracker fields, stores direct user-controlled `completed`, and always uses `manualOverride: false`.
 - **Derived Completion**: With `manualOverride: false`, a bounded counter is complete at `counterValue >= target`, a checklist is complete when every defined item is true, and an open counter has no automatic completion threshold. `completed` mirrors that derived result; binary `completed` remains the direct user-controlled state.
@@ -305,6 +307,7 @@ type LocalProgressStoreV3 = {
 
 - **Run Identity and Display Label**:
   - `runId` is a nonblank, immutable identifier unique within its parent achievement set. Map keys in `AchievementSetProgressV3.runs` must match their embedded `runId`.
+  - The exact string `__proto__` is not a valid `runId`. The create-run operation returns `INVALID_RUN_ID` for it without mutation and without exposing a store. Every other nonblank string remains valid, and run relationship checks use own-property semantics.
   - `name` is a nonblank user-facing label (such as "Main Run", "Cleanup Run", or "New Game Plus"). Duplicate display names within the same set or across sets are allowed.
   - Every initialized set contains at least one run and one valid `activeRunId` pointing to an existing run in that same set.
   - Fresh achievement sets initialized under Schema 3.0 use default run ID `default-run` and display name `Main Run`.
@@ -340,6 +343,7 @@ type CreateRunResult =
 - **Active and Retired Set Identity**:
   - Map keys in both `sets` and `retiredSets` match embedded `setId` values. The same set ID cannot exist in both maps.
   - Retired sets preserve their active-run selection and complete run ledger but are excluded from active selection, completion, roadmap, and recommendation calculations.
+- **Persisted Map Keys**: Persisted map keys (`gameProgress`, `undoState`, `sets`, `retiredSets`, `runs`, `progress`, `orphanedProgress`, and `checklistCompletion`) may be any nonblank string except the exact reserved string `__proto__`. Schema 3.0 validation rejects a store containing a reserved map key with a typed issue at that map's path instead of silently dropping it. Map keys must match their embedded identifiers, and reference fields (`activeRunId`, `preferredSetId`, `lastGameId`) are resolved with own-property semantics.
 - **Run-Aware One-Step Undo**:
   - Each game retains at most one undo snapshot in `undoState[gameId]`.
   - The snapshot stores `setId`, `runId`, the current set version as `guardedSetVersion`, and the complete previous `RunProgress` of exactly that run. `previous.runId` must equal `runId`.
@@ -497,7 +501,7 @@ type ProgressMigrationResult =
 1. **Strict Source Gate**:
    - Migration accepts only valid `schemaVersion: "2.0"` stores.
    - Malformed JSON, unsupported schema versions (including "1.0" or future versions), or structural validation failures return `INVALID_SOURCE_STORE`.
-   - Stored bytes remain untouched on source validation failure.
+   - A source store containing the exact reserved string `__proto__` as an own key at any persisted map level fails validation with `INVALID_SOURCE_STORE`. Migration never silently drops a persisted key, and stored bytes remain untouched on source validation failure.
 2. **Pre-Transformation Validation**:
    - Parse and validate input with the Schema 2.0 schema before starting transformation.
    - The Schema 3.0 schema must never be loosened to accept 2.0 shapes directly.

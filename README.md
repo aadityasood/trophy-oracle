@@ -2,7 +2,7 @@
 
 Trophy Oracle is a local-first, spoiler-aware completion cockpit. It keeps achievement progress, roadmap state, pins, notes, and spoiler choices private in the browser.
 
-The working application is a deterministic foundation built on fictional demo data. Hunt Memory is the planned signature feature family for named runs, honest counters, parked-session summaries, and point-of-no-return checks. Grounded local questions and answers are a later phase.
+The working application is a deterministic foundation built on fictional demo data. Hunt Memory is the planned signature feature family for named runs, honest counters, parked-session summaries, and point-of-no-return checks. V1 will prove the product during a real Dark Souls II platinum run with achievement-focused area sweeps, route guidance, and original schematic maps. Grounded local questions and answers are a later phase.
 
 ## What Works Today
 
@@ -22,12 +22,14 @@ The current codebase is a functional foundation using bundled fictional demo gam
 
 ## Planned Direction
 
-- **Hunt Memory:** Run Ledger, Honest Counters, Resume Capsule, and Safety Gate.
+- **Hunt Memory V1:** Run Ledger and Honest Counters keep progress separate between named playthroughs without false precision.
+- **Resume Capsule and Safety Gate:** Planned follow-ups for returning to a parked run and checking authored point-of-no-return risks. The V1 pilot still shows trusted missable warnings directly.
 - **Tonight Mode:** Approximate plans using 20, 45, or 90 minute presets and Chill, Grind, or Challenge preferences. Scheduling waits for structured, evidence-backed effort data.
 - **Completion Targets:** Platform-appropriate Platinum, base-game 100%, or all-content scope without changing official rewards.
 - **Grounded Oracle:** Read-only local reasoning with selected-set citations, spoiler consent, explicit refusals, and Oracle Receipts.
 - **AI Lab:** A future view for retrieval, citations, confidence, refusals, and evaluation results. It is not implemented today.
-- **Portable Completion Packs:** Deferred validated local files with versioning, provenance, integrity checks, and safe handling as untrusted input. The trust and verification mechanism is still open.
+- **Dark Souls II V1 Pilot:** One bundled, validated PlayStation pack for a confirmed Scholar of the First Sin edition, with manual area and bonfire selection, progressive Hint/Route/Exact directions, achievement-focused Area Sweep, and original schematic map markers.
+- **Completion Packs:** The V1 pilot is bundled data. User-imported packs remain deferred and will need versioning, provenance, integrity checks, and safe handling as untrusted input.
 
 The no-inference path remains useful for progress arithmetic, roadmap and stage projections, Oracle Focus ranking, trusted evidence display or direct lookup, and explicit refusals. It does not promise parity with inference-backed questions, semantic retrieval, or generated explanations.
 
@@ -36,10 +38,13 @@ The no-inference path remains useful for progress arithmetic, roadmap and stage 
 1. Define the public product direction and backlog.
 2. Define Hunt Memory data and migration rules.
 3. Build deterministic run, certainty, and persistence behavior with tests.
-4. Add Resume Capsule, Safety Gate, and approximate session planning.
-5. Apply responsive game-reactive styling, accessible motion, and reduced-motion behavior.
-6. Add grounded retrieval, evaluation, fallback rules, and a local inference adapter.
-7. Consider Portable Completion Packs and real-data ingestion after the core is reliable.
+4. Define the trusted location, route, edition, evidence, and spoiler contract for bundled Completion Packs.
+5. Build and validate the Dark Souls II pilot, Area Sweep, progressive route guidance, and schematic maps.
+6. Apply responsive game-reactive styling, accessible motion, and reduced-motion behavior.
+7. Validate the full supported platinum route during a real Dark Souls II run and release V1.
+8. After V1, add Resume Capsule, Safety Gate, and approximate session planning.
+9. Add grounded retrieval, evaluation, fallback rules, and a local inference adapter.
+10. Consider user-imported Completion Packs and read-only platform ingestion.
 
 ## Non-Goals
 
@@ -93,6 +98,7 @@ npm run build
 Product behavior and data contracts are documented in the repository:
 
 - [Product brief](docs/source-of-truth/product-brief.md)
+- [Feature backlog](docs/source-of-truth/feature-backlog.md)
 - [Data contract](docs/source-of-truth/data-contract.md)
 - [AI pipeline](docs/source-of-truth/ai-pipeline.md)
 - [Design specification](docs/superpowers/specs/2026-07-09-trophy-oracle-design.md)

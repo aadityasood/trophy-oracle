@@ -1,9 +1,47 @@
 import { z } from 'zod';
 
+export const RESERVED_RECORD_KEY = '__proto__';
+
+export const RESERVED_RECORD_KEY_MESSAGE =
+  "Persisted record keys cannot use the reserved key '__proto__'";
+
+export function isReservedRecordKey(value: string): boolean {
+  return value === RESERVED_RECORD_KEY;
+}
+
 export const NonBlankStringSchema = z.string().refine(
   (value) => value.trim().length > 0,
   { message: 'Must contain at least one non-whitespace character' },
 );
+
+export const PersistedRecordKeySchema = NonBlankStringSchema.refine(
+  (value) => !isReservedRecordKey(value),
+  { message: RESERVED_RECORD_KEY_MESSAGE },
+);
+
+export function safeRecord<ValueSchema extends z.ZodType>(
+  valueSchema: ValueSchema,
+) {
+  return z.preprocess(
+    (arg, ctx) => {
+      if (
+        typeof arg === 'object' &&
+        arg !== null &&
+        Object.hasOwn(arg, RESERVED_RECORD_KEY)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message: RESERVED_RECORD_KEY_MESSAGE,
+          input: arg,
+          path: [RESERVED_RECORD_KEY],
+        });
+        return z.NEVER;
+      }
+      return arg;
+    },
+    z.record(NonBlankStringSchema, valueSchema),
+  );
+}
 
 export const distinctNonBlankIds = z
   .array(NonBlankStringSchema)

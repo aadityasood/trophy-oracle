@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
   AchievementProgressV3Schema,
+  GameProgressV3Schema,
   CounterProgressSchema,
   HUNT_MEMORY_STORE_SCHEMA_VERSION,
   LocalProgressStoreV3Schema,
   OrphanedAchievementProgressV3Schema,
+  ProgressUndoSnapshotV3Schema,
+  RunLedgerSetV3Schema,
   RunProgressSchema,
 } from './hunt-memory-schema';
-import type { LocalProgressStoreV3, RunProgress } from './hunt-memory-schema';
+import { RESERVED_RECORD_KEY_MESSAGE } from './progress-schema-common';
+import type {
+  AchievementSetProgressV3,
+  LocalProgressStoreV3,
+  RetiredAchievementSetProgressV3,
+  RunProgress,
+} from './hunt-memory-schema';
 
 const TS = '2026-07-22T00:00:00.000Z';
 
@@ -92,6 +101,37 @@ function createValidV3Store(): LocalProgressStoreV3 {
         previous: createValidRun(),
       },
     },
+  };
+}
+
+function createValidRunWithRunId(runId: string): RunProgress {
+  const run = structuredClone(createValidRun());
+  run.runId = runId;
+  return run;
+}
+
+function createValidSetWithSetId(
+  setId: string,
+  runId: string,
+): AchievementSetProgressV3 {
+  return {
+    setId,
+    version: '1.0',
+    activeRunId: runId,
+    runs: { [runId]: createValidRunWithRunId(runId) },
+  };
+}
+
+function createValidRetiredSetWithSetId(
+  setId: string,
+  runId: string,
+): RetiredAchievementSetProgressV3 {
+  return {
+    setId,
+    activeRunId: runId,
+    runs: { [runId]: createValidRunWithRunId(runId) },
+    retirementReason: 'removed_set',
+    version: '2.0',
   };
 }
 
@@ -362,6 +402,60 @@ describe('hunt memory Schema 3.0 validation', () => {
     expect(RunProgressSchema.safeParse(sixPins).success).toBe(false);
   });
 
+  it('uses own-property semantics for pinned achievement membership', () => {
+    for (const achievementId of ['constructor', 'toString'] as const) {
+      const missing = structuredClone(createValidRun());
+      missing.pinnedAchievementIds = [achievementId];
+      expect(
+        RunProgressSchema.safeParse(missing).success,
+        `missing inherited pinned achievement '${achievementId}' should be rejected`,
+      ).toBe(false);
+
+      const present = structuredClone(createValidRun());
+      present.progress = {
+        ...present.progress,
+        [achievementId]: {
+          achievementId,
+          completed: false,
+          manualOverride: false,
+          lastUpdated: TS,
+          provenance: 'manual',
+        },
+      };
+      present.pinnedAchievementIds = [achievementId];
+      expect(
+        RunProgressSchema.safeParse(present).success,
+        `own pinned achievement '${achievementId}' should be accepted`,
+      ).toBe(true);
+      expect(Object.hasOwn(present.progress, achievementId)).toBe(true);
+      expect(Object.getPrototypeOf(present.progress)).toBe(Object.prototype);
+    }
+
+    const reservedKey = '__proto__';
+    const reservedPinned = structuredClone(createValidRun());
+    reservedPinned.progress = {
+      ...reservedPinned.progress,
+      [reservedKey]: {
+        achievementId: reservedKey,
+        completed: false,
+        manualOverride: false,
+        lastUpdated: TS,
+        provenance: 'manual',
+      },
+    };
+    reservedPinned.pinnedAchievementIds = [reservedKey];
+    const reservedResult = RunProgressSchema.safeParse(reservedPinned);
+    expect(
+      reservedResult.success,
+      `own reserved pinned achievement '${reservedKey}' should be rejected`,
+    ).toBe(false);
+    if (!reservedResult.success) {
+      expect(reservedResult.error.issues[0]?.message).toBe(
+        RESERVED_RECORD_KEY_MESSAGE,
+      );
+    }
+  });
+
   it('rejects empty orphan histories', () => {
     const emptyHistory = structuredClone(createValidV3Store());
     emptyHistory.gameProgress['game-a'].sets['set-a'].runs[
@@ -455,5 +549,509 @@ describe('hunt memory Schema 3.0 validation', () => {
     snapshot.previous.runId = 'missing-run';
     snapshot.guardedSetVersion = '1.0';
     expect(LocalProgressStoreV3Schema.safeParse(store).success).toBe(true);
+  });
+
+  it('uses own-property semantics for active run membership', () => {
+    for (const runId of ['constructor', 'toString'] as const) {
+      const missing = structuredClone(createValidV3Store());
+      missing.gameProgress['game-a'].sets['set-a'].activeRunId = runId;
+      expect(
+        LocalProgressStoreV3Schema.safeParse(missing).success,
+        `missing inherited run reference '${runId}' should be rejected`,
+      ).toBe(false);
+
+      const present = structuredClone(createValidV3Store());
+      present.gameProgress['game-a'].sets['set-a'].runs = {
+        [runId]: createValidRunWithRunId(runId),
+      };
+      present.gameProgress['game-a'].sets['set-a'].activeRunId = runId;
+      expect(
+        LocalProgressStoreV3Schema.safeParse(present).success,
+        `own run key '${runId}' should be accepted`,
+      ).toBe(true);
+      expect(
+        Object.hasOwn(
+          present.gameProgress['game-a'].sets['set-a'].runs,
+          runId,
+        ),
+      ).toBe(true);
+      expect(
+        Object.getPrototypeOf(
+          present.gameProgress['game-a'].sets['set-a'].runs,
+        ),
+      ).toBe(Object.prototype);
+    }
+
+    const reservedRunId = '__proto__';
+    const reservedRun = structuredClone(createValidV3Store());
+    reservedRun.gameProgress['game-a'].sets['set-a'].runs = {
+      [reservedRunId]: createValidRunWithRunId(reservedRunId),
+    };
+    reservedRun.gameProgress['game-a'].sets['set-a'].activeRunId = reservedRunId;
+    const reservedResult = LocalProgressStoreV3Schema.safeParse(reservedRun);
+    expect(
+      reservedResult.success,
+      `own reserved run key '${reservedRunId}' should be rejected`,
+    ).toBe(false);
+    if (!reservedResult.success) {
+      expect(
+        reservedResult.error.issues.some(
+          (issue) => issue.message === RESERVED_RECORD_KEY_MESSAGE,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('uses own-property semantics for preferred set membership and active/retired overlap', () => {
+    for (const setId of ['constructor', 'toString'] as const) {
+      const missingPreferred = structuredClone(createValidV3Store());
+      missingPreferred.gameProgress['game-a'].preferredSetId = setId;
+      expect(
+        LocalProgressStoreV3Schema.safeParse(missingPreferred).success,
+        `missing inherited preferred set '${setId}' should be rejected`,
+      ).toBe(false);
+
+      const ownActiveNoOverlap = structuredClone(createValidV3Store());
+      ownActiveNoOverlap.gameProgress['game-a'].sets = {
+        [setId]: createValidSetWithSetId(setId, 'legacy-v2'),
+      };
+      ownActiveNoOverlap.gameProgress['game-a'].retiredSets = {};
+      ownActiveNoOverlap.gameProgress['game-a'].preferredSetId = setId;
+      ownActiveNoOverlap.undoState = {
+        'game-a': {
+          setId,
+          runId: 'legacy-v2',
+          guardedSetVersion: '1.0',
+          previous: createValidRunWithRunId('legacy-v2'),
+        },
+      };
+      expect(
+        LocalProgressStoreV3Schema.safeParse(ownActiveNoOverlap).success,
+        `own active set '${setId}' should not falsely overlap retiredSets`,
+      ).toBe(true);
+      expect(
+        Object.hasOwn(ownActiveNoOverlap.gameProgress['game-a'].sets, setId),
+      ).toBe(true);
+      expect(
+        Object.hasOwn(
+          ownActiveNoOverlap.gameProgress['game-a'].retiredSets,
+          setId,
+        ),
+      ).toBe(false);
+
+      const realOverlap = structuredClone(createValidV3Store());
+      realOverlap.gameProgress['game-a'].sets = {
+        [setId]: createValidSetWithSetId(setId, 'legacy-v2'),
+      };
+      realOverlap.gameProgress['game-a'].retiredSets = {
+        [setId]: createValidRetiredSetWithSetId(setId, 'legacy-v2'),
+      };
+      realOverlap.gameProgress['game-a'].preferredSetId = setId;
+      realOverlap.undoState!['game-a'].setId = setId;
+      expect(
+        LocalProgressStoreV3Schema.safeParse(realOverlap).success,
+        `real own-key active/retired overlap for '${setId}' should be rejected`,
+      ).toBe(false);
+      expect(
+        Object.hasOwn(realOverlap.gameProgress['game-a'].sets, setId),
+      ).toBe(true);
+      expect(
+        Object.hasOwn(realOverlap.gameProgress['game-a'].retiredSets, setId),
+      ).toBe(true);
+      expect(
+        Object.getPrototypeOf(realOverlap.gameProgress['game-a'].sets),
+      ).toBe(Object.prototype);
+      expect(
+        Object.getPrototypeOf(realOverlap.gameProgress['game-a'].retiredSets),
+      ).toBe(Object.prototype);
+    }
+
+    const reservedSetId = '__proto__';
+    const reservedPreferred = structuredClone(createValidV3Store());
+    reservedPreferred.gameProgress['game-a'].preferredSetId = reservedSetId;
+    expect(
+      LocalProgressStoreV3Schema.safeParse(reservedPreferred).success,
+      `missing inherited preferred set '${reservedSetId}' should be rejected`,
+    ).toBe(false);
+
+    const reservedActiveNoOverlap = structuredClone(createValidV3Store());
+    reservedActiveNoOverlap.gameProgress['game-a'].sets = {
+      [reservedSetId]: createValidSetWithSetId(reservedSetId, 'legacy-v2'),
+    };
+    reservedActiveNoOverlap.gameProgress['game-a'].retiredSets = {};
+    reservedActiveNoOverlap.gameProgress['game-a'].preferredSetId = reservedSetId;
+    const reservedActiveResult = LocalProgressStoreV3Schema.safeParse(
+      reservedActiveNoOverlap,
+    );
+    expect(
+      reservedActiveResult.success,
+      `own reserved active set '${reservedSetId}' should be rejected`,
+    ).toBe(false);
+    if (!reservedActiveResult.success) {
+      expect(
+        reservedActiveResult.error.issues.some(
+          (issue) => issue.message === RESERVED_RECORD_KEY_MESSAGE,
+        ),
+      ).toBe(true);
+    }
+
+    const reservedOverlap = structuredClone(createValidV3Store());
+    reservedOverlap.gameProgress['game-a'].sets = {
+      [reservedSetId]: createValidSetWithSetId(reservedSetId, 'legacy-v2'),
+    };
+    reservedOverlap.gameProgress['game-a'].retiredSets = {
+      [reservedSetId]: createValidRetiredSetWithSetId(reservedSetId, 'legacy-v2'),
+    };
+    expect(
+      LocalProgressStoreV3Schema.safeParse(reservedOverlap).success,
+      `reserved active/retired overlap should be rejected`,
+    ).toBe(false);
+  });
+
+  it('uses own-property semantics for lastGameId and undoState membership', () => {
+    for (const gameId of ['constructor', 'toString'] as const) {
+      const missingLastGame = structuredClone(createValidV3Store());
+      missingLastGame.lastGameId = gameId;
+      expect(
+        LocalProgressStoreV3Schema.safeParse(missingLastGame).success,
+        `missing inherited lastGameId '${gameId}' should be rejected`,
+      ).toBe(false);
+
+      const missingUndoGame = structuredClone(createValidV3Store());
+      missingUndoGame.undoState = {
+        [gameId]: structuredClone(missingUndoGame.undoState!['game-a']),
+      };
+      expect(
+        LocalProgressStoreV3Schema.safeParse(missingUndoGame).success,
+        `inherited undo key '${gameId}' without matching own game should be rejected`,
+      ).toBe(false);
+
+      const validGameAndUndo = structuredClone(createValidV3Store());
+      const ownGame = structuredClone(
+        validGameAndUndo.gameProgress['game-a'],
+      );
+      ownGame.gameId = gameId;
+      validGameAndUndo.gameProgress = {
+        ...validGameAndUndo.gameProgress,
+        [gameId]: ownGame,
+      };
+      validGameAndUndo.undoState = {
+        [gameId]: structuredClone(validGameAndUndo.undoState!['game-a']),
+      };
+      validGameAndUndo.lastGameId = gameId;
+      expect(
+        LocalProgressStoreV3Schema.safeParse(validGameAndUndo).success,
+        `own game key '${gameId}' with matching undo should be accepted`,
+      ).toBe(true);
+      expect(
+        Object.hasOwn(validGameAndUndo.gameProgress, gameId),
+      ).toBe(true);
+      expect(Object.hasOwn(validGameAndUndo.undoState!, gameId)).toBe(true);
+      expect(
+        Object.getPrototypeOf(validGameAndUndo.gameProgress),
+      ).toBe(Object.prototype);
+    }
+
+    const reservedGameId = '__proto__';
+    const reservedLastGame = structuredClone(createValidV3Store());
+    reservedLastGame.lastGameId = reservedGameId;
+    expect(
+      LocalProgressStoreV3Schema.safeParse(reservedLastGame).success,
+      `missing inherited lastGameId '${reservedGameId}' should be rejected`,
+    ).toBe(false);
+
+    const reservedUndoGame = structuredClone(createValidV3Store());
+    reservedUndoGame.undoState = {
+      [reservedGameId]: structuredClone(reservedUndoGame.undoState!['game-a']),
+    };
+    const reservedUndoResult = LocalProgressStoreV3Schema.safeParse(
+      reservedUndoGame,
+    );
+    expect(
+      reservedUndoResult.success,
+      `reserved undo key '${reservedGameId}' should be rejected`,
+    ).toBe(false);
+    if (!reservedUndoResult.success) {
+      expect(
+        reservedUndoResult.error.issues.some(
+          (issue) => issue.message === RESERVED_RECORD_KEY_MESSAGE,
+        ),
+      ).toBe(true);
+    }
+
+    const reservedGameAndUndo = structuredClone(createValidV3Store());
+    const reservedOwnGame = structuredClone(
+      reservedGameAndUndo.gameProgress['game-a'],
+    );
+    reservedOwnGame.gameId = reservedGameId;
+    reservedGameAndUndo.gameProgress = {
+      ...reservedGameAndUndo.gameProgress,
+      [reservedGameId]: reservedOwnGame,
+    };
+    reservedGameAndUndo.undoState = {
+      [reservedGameId]: structuredClone(
+        reservedGameAndUndo.undoState!['game-a'],
+      ),
+    };
+    reservedGameAndUndo.lastGameId = reservedGameId;
+    const reservedGameResult = LocalProgressStoreV3Schema.safeParse(
+      reservedGameAndUndo,
+    );
+    expect(
+      reservedGameResult.success,
+      `own reserved game key '${reservedGameId}' should be rejected`,
+    ).toBe(false);
+    if (!reservedGameResult.success) {
+      expect(
+        reservedGameResult.error.issues.some(
+          (issue) => issue.message === RESERVED_RECORD_KEY_MESSAGE,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('rejects reserved embedded identities through exported Schema 3.0 schemas', () => {
+    const reservedRun = { ...createValidRun(), runId: '__proto__' };
+    const cases = [
+      {
+        name: 'achievement progress',
+        result: AchievementProgressV3Schema.safeParse({
+          achievementId: '__proto__',
+          completed: false,
+          manualOverride: false,
+          lastUpdated: TS,
+          provenance: 'manual',
+        }),
+        expectedPath: ['achievementId'],
+      },
+      {
+        name: 'run progress',
+        result: RunProgressSchema.safeParse(reservedRun),
+        expectedPath: ['runId'],
+      },
+      {
+        name: 'run ledger set',
+        result: RunLedgerSetV3Schema.safeParse({
+          setId: '__proto__',
+          activeRunId: 'legacy-v2',
+          runs: { 'legacy-v2': createValidRun() },
+        }),
+        expectedPath: ['setId'],
+      },
+      {
+        name: 'game progress',
+        result: GameProgressV3Schema.safeParse({
+          gameId: '__proto__',
+          sets: {},
+          retiredSets: {},
+        }),
+        expectedPath: ['gameId'],
+      },
+      {
+        name: 'undo snapshot set',
+        result: ProgressUndoSnapshotV3Schema.safeParse({
+          setId: '__proto__',
+          runId: 'legacy-v2',
+          guardedSetVersion: '1',
+          previous: createValidRun(),
+        }),
+        expectedPath: ['setId'],
+      },
+      {
+        name: 'undo snapshot run',
+        result: ProgressUndoSnapshotV3Schema.safeParse({
+          setId: 'set-a',
+          runId: '__proto__',
+          guardedSetVersion: '1',
+          previous: reservedRun,
+        }),
+        expectedPath: ['runId'],
+      },
+    ];
+
+    for (const testCase of cases) {
+      expect(testCase.result.success, testCase.name).toBe(false);
+      if (!testCase.result.success) {
+        expect(
+          testCase.result.error.issues.some(
+            (issue) =>
+              issue.message === RESERVED_RECORD_KEY_MESSAGE &&
+              issue.path.join('.') === testCase.expectedPath.join('.'),
+          ),
+          testCase.name,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('rejects an own reserved key at every Schema 3.0 persisted record level with nested paths', () => {
+    const validAchievementProgress = (achievementId: string) => ({
+      achievementId,
+      completed: false,
+      manualOverride: false,
+      lastUpdated: TS,
+      provenance: 'manual' as const,
+    });
+
+    const cases: {
+      name: string;
+      mutate: (store: LocalProgressStoreV3) => void;
+      expectedPath: Array<string | number>;
+    }[] = [
+      {
+        name: 'checklistCompletion',
+        mutate: (store) => {
+          store.gameProgress['game-a'].sets['set-a'].runs[
+            'legacy-v2'
+          ].progress['ach-binary'].checklistCompletion = JSON.parse(
+            '{"__proto__": true}',
+          );
+        },
+        expectedPath: [
+          'gameProgress',
+          'game-a',
+          'sets',
+          'set-a',
+          'runs',
+          'legacy-v2',
+          'progress',
+          'ach-binary',
+          'checklistCompletion',
+          '__proto__',
+        ],
+      },
+      {
+        name: 'progress',
+        mutate: (store) => {
+          store.gameProgress['game-a'].sets['set-a'].runs[
+            'legacy-v2'
+          ].progress = JSON.parse(
+            '{"__proto__": ' +
+              JSON.stringify(validAchievementProgress('__proto__')) +
+              '}',
+          );
+        },
+        expectedPath: [
+          'gameProgress',
+          'game-a',
+          'sets',
+          'set-a',
+          'runs',
+          'legacy-v2',
+          'progress',
+          '__proto__',
+        ],
+      },
+      {
+        name: 'orphanedProgress',
+        mutate: (store) => {
+          store.gameProgress['game-a'].sets['set-a'].runs[
+            'legacy-v2'
+          ].orphanedProgress = JSON.parse(
+            '{"__proto__": [' +
+              JSON.stringify({
+                ...validAchievementProgress('__proto__'),
+                trackingModeAtRemoval: 'binary',
+              }) +
+              ']}',
+          );
+        },
+        expectedPath: [
+          'gameProgress',
+          'game-a',
+          'sets',
+          'set-a',
+          'runs',
+          'legacy-v2',
+          'orphanedProgress',
+          '__proto__',
+        ],
+      },
+      {
+        name: 'runs',
+        mutate: (store) => {
+          store.gameProgress['game-a'].sets['set-a'].runs = JSON.parse(
+            '{"__proto__": ' + JSON.stringify(createValidRun()) + '}',
+          );
+        },
+        expectedPath: [
+          'gameProgress',
+          'game-a',
+          'sets',
+          'set-a',
+          'runs',
+          '__proto__',
+        ],
+      },
+      {
+        name: 'sets',
+        mutate: (store) => {
+          const set = store.gameProgress['game-a'].sets['set-a'];
+          store.gameProgress['game-a'].sets = JSON.parse(
+            '{"__proto__": ' + JSON.stringify(set) + '}',
+          );
+        },
+        expectedPath: [
+          'gameProgress',
+          'game-a',
+          'sets',
+          '__proto__',
+        ],
+      },
+      {
+        name: 'retiredSets',
+        mutate: (store) => {
+          const retired = store.gameProgress['game-a'].retiredSets[
+            'retired-removed'
+          ];
+          store.gameProgress['game-a'].retiredSets = JSON.parse(
+            '{"__proto__": ' + JSON.stringify(retired) + '}',
+          );
+        },
+        expectedPath: [
+          'gameProgress',
+          'game-a',
+          'retiredSets',
+          '__proto__',
+        ],
+      },
+      {
+        name: 'gameProgress',
+        mutate: (store) => {
+          store.gameProgress = JSON.parse('{"__proto__": {}}');
+        },
+        expectedPath: ['gameProgress', '__proto__'],
+      },
+      {
+        name: 'undoState',
+        mutate: (store) => {
+          store.undoState = JSON.parse(
+            '{"__proto__": ' +
+              JSON.stringify({
+                setId: 'set-a',
+                runId: 'legacy-v2',
+                guardedSetVersion: '1.0',
+                previous: createValidRun(),
+              }) +
+              '}',
+          );
+        },
+        expectedPath: ['undoState', '__proto__'],
+      },
+    ];
+
+    for (const testCase of cases) {
+      const store = structuredClone(createValidV3Store());
+      testCase.mutate(store);
+      const result = LocalProgressStoreV3Schema.safeParse(store);
+      expect(result.success, testCase.name).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find(
+          (i) => i.message === RESERVED_RECORD_KEY_MESSAGE,
+        );
+        expect(issue, testCase.name).toBeDefined();
+        expect(issue?.path, testCase.name).toEqual(testCase.expectedPath);
+      }
+    }
   });
 });

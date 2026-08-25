@@ -113,6 +113,16 @@ Hunt Memory will expand the local state engine beyond simple checklist ticking. 
 
 ## Supporting Features and Backlog
 
+### Area Sweep And Route Guidance
+
+This is a required V1 proving experience and is not implemented today. One validated PlayStation Completion Pack for Dark Souls II: Scholar of the First Sin will support a confirmed edition and game version. The player manually selects the active run, area, and nearest bonfire, then sees unfinished platinum-relevant objectives grouped as available, blocked, uncertain, or later-run.
+
+Each objective offers a progressive Hint, Route, and Exact reveal. Hidden route text, exact interactions, and marker coordinates stay absent from the document until that reveal level is selected. Exact guidance names the starting checkpoint, ordered landmarks, prerequisites, acquisition interaction, evidence, and last-verified game version. Missing evidence produces a visible data-gap state instead of generated guidance.
+
+Original schematic area maps show connections, hazards, checkpoints, and validated objective markers. Route cards remain usable without a map. Maps support keyboard and touch navigation, retain readable labels at supported zoom levels, expose equivalent text directions, respect spoiler consent, and avoid copied commercial map art. The V1 pilot covers every objective needed for the selected platinum, not every item in the game. Model-backed questions and answers are not required for this feature's V1 acceptance; the deterministic interface exposes the same trusted route and availability records directly.
+
+The complete feature contract lives in [feature-backlog.md](../../source-of-truth/feature-backlog.md).
+
 ### Tonight Mode
 An optional session planning tool. The player selects an available time budget (20, 45, or 90 minutes) and a desired play style:
 - Chill: Story progress, low-stress exploration, or simple checklists.
@@ -140,8 +150,8 @@ A future Oracle recommendation can include an expandable receipt showing:
 ### Cross-Platform Knowledge Transfer
 Planned cross-platform equivalence may share trusted guide evidence, tips, and classification metadata. User progress, pins, run ledgers, and undo snapshots remain strictly isolated within each platform-specific set.
 
-### Portable Completion Packs
-Future support for versioned, validated local files containing game metadata, achievement definitions, evidence snippets, tracker configurations, and theme palettes. Packs require provenance, integrity checks, size limits, safe parsing, and validation before any state change. The later ingestion and security contract will choose the signing, trust, and verification mechanism.
+### Completion Packs
+V1 includes one bundled, validated Dark Souls II pilot pack containing game metadata, achievement definitions, evidence, location routes, schematic-map markers, tracker configurations, and theme data. User-imported packs remain future work and require provenance, integrity checks, size limits, safe parsing, and validation before any state change. The later ingestion and security contract will choose the signing, trust, and verification mechanism.
 
 ## Planned Grounded Oracle And AI Lab
 
@@ -194,10 +204,13 @@ Future support for versioned, validated local files containing game metadata, ac
 1. Define the public product direction and backlog.
 2. Define a versioned Hunt Memory data contract and migration policy.
 3. Build the deterministic Hunt Memory engine and persistence behavior with tests.
-4. Add Resume Capsule, Safety Gate, and session-planning interactions.
-5. Apply the game-reactive visual identity, responsive density, purposeful motion, reduced-motion behavior, and readable time presentation.
-6. Add grounded retrieval, evaluation, deterministic fallback behavior, and a local inference adapter.
-7. Consider Portable Completion Packs and real-data ingestion only after Hunt Memory and grounded Oracle behavior are reliable.
+4. Define the bundled Completion Pack location, route, edition, evidence, and spoiler contract.
+5. Author the Dark Souls II pilot and build Area Sweep, progressive route guidance, and schematic maps.
+6. Apply the game-reactive visual identity, responsive density, purposeful motion, reduced-motion behavior, and readable time presentation.
+7. Validate the full supported platinum route during a real Dark Souls II run and release V1.
+8. After V1, add Resume Capsule, Safety Gate, and session-planning interactions.
+9. Add grounded retrieval, evaluation, deterministic fallback behavior, and a local inference adapter.
+10. Consider user-imported Completion Packs and read-only platform ingestion.
 
 ## Non-Goals
 
@@ -215,4 +228,8 @@ The run ledger storage schema, certainty arithmetic rules, and Schema 2.0 to 3.0
 
 1. **Completion Target Partitioning / DLC Grouping:** Clean schema conventions for tagging DLC expansions without disrupting platform-specific trophy grades or gamerscore totals.
 2. **Tonight Mode Effort:** Structured effort ranges, buckets, provenance rules, and estimation behavior that support approximate plans without false precision.
-3. **Completion Pack Trust:** Validation, provenance, integrity, trust, and verification rules for safely handling untrusted local files.
+3. **Bundled Completion Pack Contract:** Exact release identity, evidence, location, route, availability, spoiler, and marker fields for the trusted pilot pack.
+4. **Guide State Ownership:** Run-local persistence and undo behavior for active area, checkpoint, reveal level, and Save For Later state before Schema 3.0 activation.
+5. **Schema 3.0 Cutover Recovery:** Backup, rollback, and stale-tab behavior before replacing the existing local progress value.
+6. **Schematic Map Representation:** An accessible per-area data and rendering format with stable markers, text equivalents, and measured bundle limits.
+7. **Completion Pack Trust:** Validation, provenance, integrity, trust, and verification rules for future untrusted local files.
