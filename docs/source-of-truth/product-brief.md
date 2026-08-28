@@ -71,8 +71,6 @@ Hunt Memory includes four core capabilities (planned for future phases):
 
 ## Supporting Backlog Features
 
-Detailed feature definitions live in [feature-backlog.md](./feature-backlog.md). These entries are planned product direction, not current application behavior.
-
 - **Tonight Mode:** The player chooses a 20, 45, or 90 minute budget and a Chill, Grind, or Challenge preference. Plans are approximate and constraint-aware. A future data contract must define structured, evidence-backed effort ranges, buckets, or another deterministic representation before scheduling is implemented. The product must not invent exact fit from the current free-text `estimatedEffort` field.
 - **Completion Target:** An explicit goal setting per game (such as PlayStation Platinum, base-game 100%, or all-content/DLC completion). This adjusts roadmap filtering without redefining platform rewards or altering recorded progress.
 - **Oracle Receipt:** A transparent explanation panel for every recommendation. It details why an item was suggested, cites relevant achievement IDs and evidence, lists active constraints, and notes data uncertainty.

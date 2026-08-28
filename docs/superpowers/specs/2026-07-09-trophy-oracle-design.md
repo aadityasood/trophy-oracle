@@ -121,8 +121,6 @@ Each objective offers a progressive Hint, Route, and Exact reveal. Hidden route 
 
 Original schematic area maps show connections, hazards, checkpoints, and validated objective markers. Route cards remain usable without a map. Maps support keyboard and touch navigation, retain readable labels at supported zoom levels, expose equivalent text directions, respect spoiler consent, and avoid copied commercial map art. The V1 pilot covers every objective needed for the selected platinum, not every item in the game. Model-backed questions and answers are not required for this feature's V1 acceptance; the deterministic interface exposes the same trusted route and availability records directly.
 
-The complete feature contract lives in [feature-backlog.md](../../source-of-truth/feature-backlog.md).
-
 ### Tonight Mode
 An optional session planning tool. The player selects an available time budget (20, 45, or 90 minutes) and a desired play style:
 - Chill: Story progress, low-stress exploration, or simple checklists.
