@@ -98,7 +98,6 @@ npm run build
 Product behavior and data contracts are documented in the repository:
 
 - [Product brief](docs/source-of-truth/product-brief.md)
-- [Feature backlog](docs/source-of-truth/feature-backlog.md)
 - [Data contract](docs/source-of-truth/data-contract.md)
 - [AI pipeline](docs/source-of-truth/ai-pipeline.md)
 - [Design specification](docs/superpowers/specs/2026-07-09-trophy-oracle-design.md)
