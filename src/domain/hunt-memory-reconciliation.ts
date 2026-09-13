@@ -17,8 +17,8 @@ import {
   groupChecklistDeltas,
   reconcileSingleRunProgress,
   restoreSchema2AbsentOrphansRun,
-  validateTrackerShape,
 } from './hunt-memory-reconciliation-run';
+import { validateTrackerShape } from './hunt-memory-tracker-shape';
 import type {
   AchievementSetReconciliationDeltaV3,
   HuntMemoryReconciliationResult,

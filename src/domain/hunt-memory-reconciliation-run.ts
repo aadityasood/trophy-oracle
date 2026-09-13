@@ -20,36 +20,7 @@ function deepClone<T>(value: T): T {
   return structuredClone(value);
 }
 
-export function validateTrackerShape(
-  progress: AchievementProgressV3,
-  tracking: TrackingConfiguration,
-): boolean {
-  if (tracking.mode === 'binary') {
-    return (
-      progress.counter === undefined &&
-      progress.checklistCompletion === undefined &&
-      !progress.manualOverride
-    );
-  }
-
-  if (tracking.mode === 'counter') {
-    return (
-      progress.counter !== undefined &&
-      progress.checklistCompletion === undefined
-    );
-  }
-
-  const checklist = progress.checklistCompletion;
-  if (progress.counter !== undefined || checklist === undefined) {
-    return false;
-  }
-  const expectedIds = tracking.items.map((item) => item.id);
-  const actualKeys = Object.keys(checklist);
-  return (
-    actualKeys.length === expectedIds.length &&
-    expectedIds.every((id) => Object.hasOwn(checklist, id))
-  );
-}
+export { validateTrackerShape } from './hunt-memory-tracker-shape';
 
 export function createEmptyRunDelta(runId: string): RunReconciliationDelta {
   return {
