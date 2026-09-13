@@ -254,6 +254,54 @@ describe('hunt-memory-reconciliation retired and safety', () => {
       ]);
       expect(LocalProgressStoreV3Schema.safeParse(result.store).success).toBe(true);
     });
+
+    it('retains same-version removed_set when active record in retired set carries manualOverride for returning binary definition', () => {
+      const returningSet = createTestSet('set-ret', '1.0', [
+        createBinaryAchievement('ach-1'),
+      ]);
+      const prevGame = createTestGame('g-1', '1.0', []);
+      const nextGame = createTestGame('g-1', '1.0', [returningSet]);
+
+      const store = createDefaultHuntMemoryStore();
+      const gameProgress = createDefaultGameProgressV3(nextGame, TS1);
+      const setLedger = gameProgress.sets['set-ret'];
+      setLedger.runs[DEFAULT_HUNT_MEMORY_RUN_ID].progress['ach-1'] = {
+        achievementId: 'ach-1',
+        completed: true,
+        manualOverride: true,
+        counter: { certainty: 'exact', value: 4 },
+        lastUpdated: TS1,
+        provenance: 'manual',
+      };
+      delete gameProgress.sets['set-ret'];
+      gameProgress.retiredSets['set-ret'] = {
+        ...setLedger,
+        retirementReason: 'removed_set',
+        version: '1.0',
+      };
+      store.gameProgress['g-1'] = gameProgress;
+      const retiredSnapshot = deepClone(gameProgress.retiredSets['set-ret']);
+
+      const result = reconcileHuntMemoryGameProgress(
+        store,
+        prevGame,
+        nextGame,
+        TS2,
+      );
+
+      expect(Object.hasOwn(result.store.gameProgress['g-1'].sets, 'set-ret')).toBe(
+        false,
+      );
+      expect(result.store.gameProgress['g-1'].retiredSets['set-ret']).toEqual(
+        retiredSnapshot,
+      );
+      expect(result.report.restoredRetiredSetIds).toEqual([]);
+      expect(result.report.retainedRetiredSetIds).toEqual(['set-ret']);
+      expect(result.report.schemaConflicts).toEqual([
+        "Retired set 'set-ret' has incompatible progress for returning definition",
+      ]);
+      expect(LocalProgressStoreV3Schema.safeParse(result.store).success).toBe(true);
+    });
   });
 
   describe('Area 14: schema_2_absent_orphans restoration', () => {

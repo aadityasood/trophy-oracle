@@ -1971,6 +1971,107 @@ describe('progress shape mismatch', () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.code).toBe('PROGRESS_SHAPE_MISMATCH');
   });
+
+  it('defensively rejects binary mutations on directly constructed typed state with manualOverride and preserves undo snapshot', () => {
+    let store = createPopulatedStore();
+    store = expectChanged(
+      setRunBinaryCompletion(
+        store,
+        mockGameStellarDrift,
+        SET_PS,
+        DEFAULT_RUN,
+        'sd-ps-002',
+        true,
+        TS2,
+      ),
+    );
+    expect(store.undoState?.['stellar-drift']).toBeDefined();
+
+    const progress = getProgress(
+      store,
+      'stellar-drift',
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-001',
+    );
+    progress.completed = true;
+    progress.manualOverride = true;
+    delete progress.counter;
+    delete progress.checklistCompletion;
+
+    expect(LocalProgressStoreV3Schema.safeParse(store).success).toBe(false);
+
+    const beforeStore = structuredClone(store);
+    const beforeUndo = structuredClone(store.undoState);
+
+    const binaryResult = setRunBinaryCompletion(
+      store,
+      mockGameStellarDrift,
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-001',
+      false,
+      TS3,
+    );
+    expect(binaryResult.success).toBe(false);
+    if (!binaryResult.success) {
+      expect(binaryResult.code).toBe('PROGRESS_SHAPE_MISMATCH');
+    }
+    expect('store' in binaryResult).toBe(false);
+    expect(store).toEqual(beforeStore);
+    expect(store.undoState).toEqual(beforeUndo);
+
+    const notesResult = setRunNotes(
+      store,
+      mockGameStellarDrift,
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-001',
+      'Updated note text',
+      TS3,
+    );
+    expect(notesResult.success).toBe(false);
+    if (!notesResult.success) {
+      expect(notesResult.code).toBe('PROGRESS_SHAPE_MISMATCH');
+    }
+    expect('store' in notesResult).toBe(false);
+    expect(store).toEqual(beforeStore);
+    expect(store.undoState).toEqual(beforeUndo);
+
+    const pinResult = setRunPinned(
+      store,
+      mockGameStellarDrift,
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-001',
+      true,
+      TS3,
+    );
+    expect(pinResult.success).toBe(false);
+    if (!pinResult.success) {
+      expect(pinResult.code).toBe('PROGRESS_SHAPE_MISMATCH');
+    }
+    expect('store' in pinResult).toBe(false);
+    expect(store).toEqual(beforeStore);
+    expect(store.undoState).toEqual(beforeUndo);
+
+    const overrideResult = setRunCompletionOverride(
+      store,
+      mockGameStellarDrift,
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-001',
+      true,
+      TS3,
+    );
+    expect(overrideResult.success).toBe(false);
+    if (!overrideResult.success) {
+      expect(overrideResult.code).toBe('PROGRESS_SHAPE_MISMATCH');
+    }
+    expect('store' in overrideResult).toBe(false);
+    expect(store).toEqual(beforeStore);
+    expect(store.undoState).toEqual(beforeUndo);
+  });
 });
 
 describe('pin behavior', () => {

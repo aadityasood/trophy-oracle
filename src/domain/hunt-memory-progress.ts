@@ -15,6 +15,7 @@ import {
   type RunProgress,
 } from './hunt-memory-schema';
 import { isIsoUtcString } from './progress-schema-common';
+import { validateTrackerShape } from './hunt-memory-tracker-shape';
 
 export type HuntMemoryMutationFailureCode =
   | 'INVALID_TIMESTAMP'
@@ -97,30 +98,6 @@ function successResult(
   changed: boolean,
 ): HuntMemoryMutationResult {
   return { success: true, store, changed };
-}
-
-function validateTrackerShape(
-  progress: AchievementProgressV3,
-  tracking: TrackingConfiguration,
-): boolean {
-  if (tracking.mode === 'binary') {
-    return progress.counter === undefined && progress.checklistCompletion === undefined;
-  }
-
-  if (tracking.mode === 'counter') {
-    return progress.counter !== undefined && progress.checklistCompletion === undefined;
-  }
-
-  const checklist = progress.checklistCompletion;
-  if (progress.counter !== undefined || checklist === undefined) {
-    return false;
-  }
-  const expectedIds = tracking.items.map((item) => item.id);
-  const actualIds = Object.keys(checklist);
-  return (
-    actualIds.length === expectedIds.length &&
-    expectedIds.every((id) => Object.hasOwn(checklist, id))
-  );
 }
 
 type RunMutationContext = {
