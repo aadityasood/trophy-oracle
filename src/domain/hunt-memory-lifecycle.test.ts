@@ -438,6 +438,16 @@ describe('hunt memory lifecycle', () => {
       { args: [GAME_MISSING, 'set-x', 'run', 'Run', TS2], code: 'GAME_NOT_FOUND' },
       { args: [GAME_A, 'retired-set', 'run', 'Run', TS2], code: 'SET_RETIRED' },
       { args: [GAME_A, 'missing-set', 'run', 'Run', TS2], code: 'SET_NOT_FOUND' },
+      {
+        args: [
+          game('game-a', [achievementSet('set-a', '2.0', SET_A.achievements), SET_B]),
+          'set-a',
+          'run',
+          'Run',
+          TS2,
+        ],
+        code: 'SET_VERSION_MISMATCH',
+      },
       { args: [GAME_A, 'set-a', DEFAULT_HUNT_MEMORY_RUN_ID, 'Run', TS2], code: 'DUPLICATE_RUN_ID' },
     ] as const;
 
@@ -470,6 +480,127 @@ describe('hunt memory lifecycle', () => {
     expect(result.code).toBe('SET_NOT_FOUND');
     expect('store' in result).toBe(false);
     expect(store).toEqual(before);
+  });
+
+  it('returns SET_VERSION_MISMATCH when stored set version is older than supplied definition', () => {
+    const store = createPopulatedStore();
+    const storeBefore = structuredClone(store);
+    const newerGame = game('game-a', [
+      achievementSet('set-a', '2.0', [
+        ...SET_A.achievements,
+        binaryAchievement('ach-new-v2'),
+      ]),
+      SET_B,
+    ]);
+    const gameBefore = structuredClone(newerGame);
+
+    const result = createRun(
+      store,
+      newerGame,
+      'set-a',
+      'fresh-run',
+      'Fresh Run',
+      TS2,
+    );
+
+    expect(result).toEqual({
+      success: false,
+      code: 'SET_VERSION_MISMATCH',
+      message: "Set 'set-a' version mismatch: stored '1.0', expected '2.0'",
+    });
+    expect('store' in result).toBe(false);
+    expect(store).toEqual(storeBefore);
+    expect(newerGame).toEqual(gameBefore);
+
+    const activeSet = store.gameProgress['game-a'].sets['set-a'];
+    expect(activeSet.activeRunId).toBe(DEFAULT_HUNT_MEMORY_RUN_ID);
+    expect(Object.keys(activeSet.runs).sort()).toEqual([
+      DEFAULT_HUNT_MEMORY_RUN_ID,
+      'second-run',
+    ]);
+    expect('ach-new-v2' in activeSet.runs[DEFAULT_HUNT_MEMORY_RUN_ID].progress).toBe(
+      false,
+    );
+    expect('ach-new-v2' in activeSet.runs['second-run'].progress).toBe(false);
+    expect(store.undoState).toEqual(storeBefore.undoState);
+    expect(store.gameProgress['game-a'].retiredSets).toEqual(
+      storeBefore.gameProgress['game-a'].retiredSets,
+    );
+    expect(store.gameProgress['game-b']).toEqual(storeBefore.gameProgress['game-b']);
+  });
+
+  it('returns SET_VERSION_MISMATCH when stored set version is newer than supplied definition', () => {
+    const store = createPopulatedStore();
+    store.gameProgress['game-a'].sets['set-a'].version = '2.0';
+    const storeBefore = structuredClone(store);
+    const gameBefore = structuredClone(GAME_A);
+
+    const result = createRun(
+      store,
+      GAME_A,
+      'set-a',
+      'fresh-run',
+      'Fresh Run',
+      TS2,
+    );
+
+    expect(result).toEqual({
+      success: false,
+      code: 'SET_VERSION_MISMATCH',
+      message: "Set 'set-a' version mismatch: stored '2.0', expected '1.0'",
+    });
+    expect('store' in result).toBe(false);
+    expect(store).toEqual(storeBefore);
+    expect(GAME_A).toEqual(gameBefore);
+  });
+
+  it('rejects stored version 1.0 with supplied definition version 1.0.0', () => {
+    const store = createPopulatedStore();
+    const suppliedGame = game('game-a', [
+      achievementSet('set-a', '1.0.0', SET_A.achievements),
+      SET_B,
+    ]);
+    const storeBefore = structuredClone(store);
+    const gameBefore = structuredClone(suppliedGame);
+
+    const result = createRun(store, suppliedGame, 'set-a', 'run', 'Run', TS2);
+
+    expect(result).toEqual({
+      success: false,
+      code: 'SET_VERSION_MISMATCH',
+      message: "Set 'set-a' version mismatch: stored '1.0', expected '1.0.0'",
+    });
+    expect('store' in result).toBe(false);
+    expect(store).toEqual(storeBefore);
+    expect(suppliedGame).toEqual(gameBefore);
+  });
+
+  it('returns SET_VERSION_MISMATCH before duplicate run ID check when version mismatches', () => {
+    const store = createPopulatedStore();
+    const storeBefore = structuredClone(store);
+    const newerGame = game('game-a', [
+      achievementSet('set-a', '2.0', SET_A.achievements),
+      SET_B,
+    ]);
+    const gameBefore = structuredClone(newerGame);
+
+    const result = createRun(
+      store,
+      newerGame,
+      'set-a',
+      DEFAULT_HUNT_MEMORY_RUN_ID,
+      'Duplicate Run',
+      TS2,
+    );
+
+    expect(result).toEqual({
+      success: false,
+      code: 'SET_VERSION_MISMATCH',
+      message: "Set 'set-a' version mismatch: stored '1.0', expected '2.0'",
+    });
+    expect('store' in result).toBe(false);
+    expect(store).toEqual(storeBefore);
+    expect(newerGame).toEqual(gameBefore);
   });
 
   it('returns typed failures for missing prototype-sensitive game, set, retired-set, and run keys', () => {

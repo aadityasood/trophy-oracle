@@ -27,7 +27,8 @@ export type CreateRunFailureCode =
   | 'DUPLICATE_RUN_ID'
   | 'GAME_NOT_FOUND'
   | 'SET_NOT_FOUND'
-  | 'SET_RETIRED';
+  | 'SET_RETIRED'
+  | 'SET_VERSION_MISMATCH';
 
 export type CreateRunResult =
   | { success: true; store: LocalProgressStoreV3; runId: string }
@@ -230,6 +231,14 @@ export function createRun(
     };
   }
   const setProgress = gameProgress.sets[setId];
+
+  if (setProgress.version !== setDefinition.version) {
+    return {
+      success: false,
+      code: 'SET_VERSION_MISMATCH',
+      message: `Set '${setId}' version mismatch: stored '${setProgress.version}', expected '${setDefinition.version}'`,
+    };
+  }
 
   if (Object.hasOwn(setProgress.runs, runId)) {
     return {
