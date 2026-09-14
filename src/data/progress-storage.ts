@@ -13,6 +13,8 @@ export interface StorageLike {
   removeItem?(key: string): void;
 }
 
+export type RevisionToken = string | null;
+
 export type LoadProgressErrorCode =
   | 'STORAGE_ACCESS_ERROR'
   | 'MALFORMED_JSON'
@@ -20,7 +22,12 @@ export type LoadProgressErrorCode =
   | 'INVALID_STRUCTURE';
 
 export type LoadProgressResult =
-  | { success: true; store: LocalProgressStore; source: 'loaded' | 'default' }
+  | {
+      success: true;
+      store: LocalProgressStore;
+      source: 'loaded' | 'default';
+      token: RevisionToken;
+    }
   | {
       success: false;
       fallbackStore: LocalProgressStore;
@@ -28,10 +35,14 @@ export type LoadProgressResult =
       message: string;
     };
 
-export type SaveProgressErrorCode = 'INVALID_SAVE_STATE' | 'STORAGE_WRITE_ERROR';
+export type SaveProgressErrorCode =
+  | 'INVALID_SAVE_STATE'
+  | 'STORAGE_ACCESS_ERROR'
+  | 'STALE_WRITE_CONFLICT'
+  | 'STORAGE_WRITE_ERROR';
 
 export type SaveProgressResult =
-  | { success: true }
+  | { success: true; token: string }
   | { success: false; code: SaveProgressErrorCode; message: string };
 
 export function loadProgressFromStorage(
@@ -56,6 +67,7 @@ export function loadProgressFromStorage(
       success: true,
       store: createDefaultLocalProgressStore(),
       source: 'default',
+      token: null,
     };
   }
 
@@ -78,6 +90,7 @@ export function loadProgressFromStorage(
       success: true,
       store: parseResult.data,
       source: 'loaded',
+      token: rawValue,
     };
   }
 
@@ -106,6 +119,7 @@ export function loadProgressFromStorage(
 export function saveProgressToStorage(
   store: LocalProgressStore,
   storage: StorageLike,
+  expectedToken: RevisionToken,
   key: string = DEFAULT_STORAGE_KEY
 ): SaveProgressResult {
   const parseResult = LocalProgressStoreSchema.safeParse(store);
@@ -120,10 +134,32 @@ export function saveProgressToStorage(
     };
   }
 
+  const serialized = JSON.stringify(parseResult.data);
+
+  let currentRaw: string | null;
   try {
-    const serialized = JSON.stringify(parseResult.data);
+    currentRaw = storage.getItem(key);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      code: 'STORAGE_ACCESS_ERROR',
+      message: `Failed to read from storage during save: ${errorMsg}`,
+    };
+  }
+
+  // Exact raw byte comparison ensures stale or foreign writes are rejected without parsing.
+  if (currentRaw !== expectedToken) {
+    return {
+      success: false,
+      code: 'STALE_WRITE_CONFLICT',
+      message: 'Storage has been modified by another session.',
+    };
+  }
+
+  try {
     storage.setItem(key, serialized);
-    return { success: true };
+    return { success: true, token: serialized };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     return {

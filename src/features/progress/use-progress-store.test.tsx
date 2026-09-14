@@ -1,6 +1,6 @@
 import { StrictMode, type PropsWithChildren } from 'react';
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_STORAGE_KEY } from '../../data/progress-storage';
 import { createDefaultLocalProgressStore } from '../../domain/progress-engine';
 import { CURRENT_STORE_SCHEMA_VERSION } from '../../domain/progress-schema';
@@ -504,5 +504,202 @@ describe('useProgressStore', () => {
       useProgressStore({ storage: null, now: fixedNow }),
     );
     expect(result.current.store).toEqual(createDefaultLocalProgressStore());
+  });
+
+  it('rejects stale action when two independently mounted hooks share storage', () => {
+    const storage = new MemoryStorage();
+    const { result: hook1 } = renderHook(() =>
+      useProgressStore({ storage, now: fixedNow }),
+    );
+    const { result: hook2 } = renderHook(() =>
+      useProgressStore({ storage, now: fixedNow }),
+    );
+
+    const hook2InitialStore = hook2.current.store;
+
+    act(() => hook1.current.selectGameAction(mockGameStellarDrift));
+    expect(storage.writeCount).toBe(1);
+    expect(hook1.current.store.lastGameId).toBe('stellar-drift');
+    expect(hook1.current.persistenceStatus).toBeNull();
+    const storedAfterHook1 = storage.getRawValue(DEFAULT_STORAGE_KEY);
+    expect(storedAfterHook1).not.toBeNull();
+
+    act(() => hook2.current.selectGameAction(mockGameStellarDrift));
+
+    expect(hook2.current.store).toBe(hook2InitialStore);
+    expect(hook2.current.canSave).toBe(false);
+    expect(hook2.current.persistenceStatus).toBe(
+      'Saved progress changed in another session. Reload required to resume saving.',
+    );
+    expect(storage.writeCount).toBe(1);
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(storedAfterHook1);
+  });
+
+  it('handles save-time read failure by rejecting store changes and showing reload-required state', () => {
+    const storage = new MemoryStorage();
+    const { result } = renderHook(() =>
+      useProgressStore({ storage, now: fixedNow }),
+    );
+    const initialStore = result.current.store;
+
+    storage.setReadError(new Error('Save-time disk error'));
+    act(() => result.current.selectGameAction(mockGameStellarDrift));
+
+    expect(result.current.store).toBe(initialStore);
+    expect(result.current.canSave).toBe(false);
+    expect(result.current.persistenceStatus).toBe(
+      'Saved progress could not be checked. Reload required to resume saving.',
+    );
+    expect(result.current.persistenceStatus).not.toContain('another session');
+    expect(storage.writeCount).toBe(0);
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBeNull();
+  });
+
+  it('marks session stale on browser storage event, ignores identical values and other keys, and cleans up on unmount', () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+
+    window.localStorage.clear();
+
+    const { result, unmount } = renderHook(() =>
+      useProgressStore({ storage: window.localStorage, now: fixedNow }),
+    );
+
+    const storageListenerCall = addEventListenerSpy.mock.calls.find(
+      ([type]) => type === 'storage',
+    );
+    expect(storageListenerCall).toBeDefined();
+    const registeredListener = storageListenerCall?.[1];
+    expect(typeof registeredListener).toBe('function');
+
+    expect(result.current.canSave).toBe(true);
+    expect(result.current.persistenceStatus).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'some.other.key',
+          newValue: 'foo',
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+    expect(result.current.canSave).toBe(true);
+    expect(result.current.persistenceStatus).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: DEFAULT_STORAGE_KEY,
+          newValue: null,
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+    expect(result.current.canSave).toBe(true);
+    expect(result.current.persistenceStatus).toBeNull();
+
+    const foreignBytes = JSON.stringify({
+      schemaVersion: CURRENT_STORE_SCHEMA_VERSION,
+      lastGameId: 'other-game',
+      gameProgress: {},
+    });
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: DEFAULT_STORAGE_KEY,
+          newValue: foreignBytes,
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+    expect(result.current.canSave).toBe(false);
+    expect(result.current.persistenceStatus).toBe(
+      'Saved progress changed in another session. Reload required to resume saving.',
+    );
+
+    const storeBeforeAction = result.current.store;
+    act(() => result.current.selectGameAction(mockGameStellarDrift));
+    expect(result.current.store).toBe(storeBeforeAction);
+
+    unmount();
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      'storage',
+      registeredListener,
+    );
+
+    addEventListenerSpy.mockRestore();
+    removeEventListenerSpy.mockRestore();
+    window.localStorage.clear();
+  });
+
+  it('ignores a clear event with no saved token and latches stale after saved progress is cleared', () => {
+    window.localStorage.clear();
+    const { result, unmount } = renderHook(() =>
+      useProgressStore({ storage: window.localStorage, now: fixedNow }),
+    );
+    const dispatchClearEvent = () => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: null,
+          newValue: null,
+          storageArea: window.localStorage,
+        }),
+      );
+    };
+
+    act(dispatchClearEvent);
+    expect(result.current.canSave).toBe(true);
+    expect(result.current.persistenceStatus).toBeNull();
+    expect(window.localStorage.length).toBe(0);
+
+    act(() => result.current.selectGameAction(mockGameStellarDrift));
+    const savedStore = result.current.store;
+    expect(window.localStorage.getItem(DEFAULT_STORAGE_KEY)).not.toBeNull();
+
+    act(() => {
+      window.localStorage.clear();
+      dispatchClearEvent();
+    });
+    expect(result.current.canSave).toBe(false);
+    expect(result.current.persistenceStatus).toBe(
+      'Saved progress changed in another session. Reload required to resume saving.',
+    );
+    expect(result.current.store).toBe(savedStore);
+
+    act(() => {
+      result.current.selectSetAction(mockGameStellarDrift, 'stellar-drift-steam');
+    });
+    expect(result.current.store).toBe(savedStore);
+    expect(window.localStorage.length).toBe(0);
+    unmount();
+  });
+
+  it('marks session stale when existing key is deleted via browser storage event', () => {
+    window.localStorage.clear();
+    const initialRaw = JSON.stringify(createDefaultLocalProgressStore());
+    window.localStorage.setItem(DEFAULT_STORAGE_KEY, initialRaw);
+
+    const { result } = renderHook(() =>
+      useProgressStore({ storage: window.localStorage, now: fixedNow }),
+    );
+    expect(result.current.canSave).toBe(true);
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: DEFAULT_STORAGE_KEY,
+          newValue: null,
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+
+    expect(result.current.canSave).toBe(false);
+    expect(result.current.persistenceStatus).toBe(
+      'Saved progress changed in another session. Reload required to resume saving.',
+    );
+
+    window.localStorage.clear();
   });
 });
