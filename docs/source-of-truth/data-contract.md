@@ -323,7 +323,7 @@ type LocalProgressStoreV3 = {
   - A valid new run initializes every current achievement with `completed: false`, `manualOverride: false`, `provenance: "manual"`, the supplied timestamp as `lastUpdated`, no notes, and mode-correct tracker state. Counters start at `{ certainty: "exact", value: 0 }`; checklists start with every current item `false`; binary records have no tracker state.
   - Pins, active stage, and orphan history start empty. No progress, completion, notes, certainty, provenance, or timestamps carry over from another run.
   - The new run uses the supplied timestamp as `createdAt` and becomes the set's active run. Run creation neither creates nor clears progress undo.
-  - Duplicate run IDs, blank IDs or names, invalid timestamps, missing game or set targets, and retired-set targets return a typed failure without mutation. Duplicate display names are allowed.
+  - Run creation requires the supplied set definition version to exactly match the stored active set version. Blank IDs or names, invalid timestamps, missing game or set targets, retired-set targets, set version mismatches, and duplicate run IDs return a typed failure without mutation. Duplicate display names are allowed.
 
 ```ts
 type CreateRunFailureCode =
@@ -333,7 +333,8 @@ type CreateRunFailureCode =
   | "DUPLICATE_RUN_ID"
   | "GAME_NOT_FOUND"
   | "SET_NOT_FOUND"
-  | "SET_RETIRED";
+  | "SET_RETIRED"
+  | "SET_VERSION_MISMATCH";
 
 type CreateRunResult =
   | { success: true; store: LocalProgressStoreV3; runId: string }
