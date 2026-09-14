@@ -634,7 +634,7 @@ export function setRunNotes(
   );
   const nextRun = nextStore.gameProgress[game.id].sets[setId].runs[runId];
   const nextProgress: AchievementProgressV3 = {
-    ...progress,
+    ...nextRun.progress[achievementId],
     provenance: 'manual',
     lastUpdated: timestamp,
   };
@@ -698,7 +698,7 @@ export function setRunCompletionOverride(
   );
   const nextRun = nextStore.gameProgress[game.id].sets[setId].runs[runId];
   const nextProgress: AchievementProgressV3 = {
-    ...progress,
+    ...nextRun.progress[achievementId],
     manualOverride: override,
     completed: nextCompleted,
     provenance: 'manual',
