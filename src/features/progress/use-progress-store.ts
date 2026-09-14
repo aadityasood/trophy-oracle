@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameRecord } from '../../domain/achievement-schema';
 import {
   createDefaultLocalProgressStore,
@@ -16,8 +16,10 @@ import {
 import type { MutationResult } from '../../domain/progress-engine';
 import type { LocalProgressStore } from '../../domain/progress-schema';
 import {
+  DEFAULT_STORAGE_KEY,
   loadProgressFromStorage,
   saveProgressToStorage,
+  type RevisionToken,
   type StorageLike,
 } from '../../data/progress-storage';
 
@@ -26,9 +28,16 @@ export interface UseProgressStoreOptions {
   now?: () => string;
 }
 
+const STALE_RELOAD_STATUS =
+  'Saved progress changed in another session. Reload required to resume saving.';
+
+const READ_ERROR_RELOAD_STATUS =
+  'Saved progress could not be checked. Reload required to resume saving.';
+
 type InitialProgressState = {
   store: LocalProgressStore;
   canSave: boolean;
+  token: RevisionToken;
   persistenceStatus: string | null;
 };
 
@@ -50,6 +59,7 @@ function loadInitialState(storage: StorageLike | null): InitialProgressState {
     return {
       store: createDefaultLocalProgressStore(),
       canSave: false,
+      token: null,
       persistenceStatus: 'Session-only mode: progress is available in memory but will not be saved.',
     };
   }
@@ -59,6 +69,7 @@ function loadInitialState(storage: StorageLike | null): InitialProgressState {
     return {
       store: result.fallbackStore,
       canSave: false,
+      token: null,
       persistenceStatus: `Saved progress could not be loaded (${result.code}). This session will not overwrite it.`,
     };
   }
@@ -66,6 +77,7 @@ function loadInitialState(storage: StorageLike | null): InitialProgressState {
   return {
     store: result.store,
     canSave: true,
+    token: result.token,
     persistenceStatus: null,
   };
 }
@@ -79,34 +91,118 @@ export function useProgressStore(options: UseProgressStoreOptions = {}) {
   const [initialState] = useState(() => loadInitialState(dependencies.storage));
   const [store, setStore] = useState(initialState.store);
   const latestStoreRef = useRef(initialState.store);
+  const currentTokenRef = useRef<RevisionToken>(initialState.token);
+  const canSaveRef = useRef(initialState.canSave);
+  const isStaleRef = useRef(false);
+  const [canSave, setCanSave] = useState(initialState.canSave);
   const [persistenceStatus, setPersistenceStatus] = useState<string | null>(
     initialState.persistenceStatus,
   );
   const [actionStatus, setActionStatus] = useState<string | null>(null);
 
+  useEffect(() => {
+    try {
+      if (
+        typeof window === 'undefined' ||
+        !dependencies.storage ||
+        dependencies.storage !== window.localStorage
+      ) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    const isTargetStorageArea = (event: StorageEvent): boolean => {
+      try {
+        return !event.storageArea || event.storageArea === window.localStorage;
+      } catch {
+        return false;
+      }
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (!isTargetStorageArea(event)) {
+        return;
+      }
+      if (event.key === null) {
+        if (currentTokenRef.current === null) return;
+      } else if (
+        event.key !== DEFAULT_STORAGE_KEY ||
+        event.newValue === currentTokenRef.current
+      ) {
+        return;
+      }
+
+      // Storage event is an early warning: mark stale and disable future saves.
+      isStaleRef.current = true;
+      canSaveRef.current = false;
+      setCanSave(false);
+      setPersistenceStatus(STALE_RELOAD_STATUS);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [dependencies.storage]);
+
   const commitStore = useCallback(
     (nextStore: LocalProgressStore): boolean => {
       if (nextStore === latestStoreRef.current) return false;
 
+      if (isStaleRef.current) {
+        return false;
+      }
+
+      if (!canSaveRef.current || !dependencies.storage) {
+        latestStoreRef.current = nextStore;
+        setStore(nextStore);
+        setActionStatus(null);
+        return true;
+      }
+
+      const saveResult = saveProgressToStorage(
+        nextStore,
+        dependencies.storage,
+        currentTokenRef.current,
+      );
+
+      if (saveResult.success) {
+        currentTokenRef.current = saveResult.token;
+        latestStoreRef.current = nextStore;
+        setStore(nextStore);
+        setActionStatus(null);
+        setPersistenceStatus(null);
+        return true;
+      }
+
+      if (saveResult.code === 'STALE_WRITE_CONFLICT') {
+        // Fail closed: reject candidate, keep current in-memory store, and disable future saves.
+        isStaleRef.current = true;
+        canSaveRef.current = false;
+        setCanSave(false);
+        setPersistenceStatus(STALE_RELOAD_STATUS);
+        return false;
+      }
+
+      if (saveResult.code === 'STORAGE_ACCESS_ERROR') {
+        // Fail closed: reject candidate, keep current in-memory store, and disable future saves.
+        isStaleRef.current = true;
+        canSaveRef.current = false;
+        setCanSave(false);
+        setPersistenceStatus(READ_ERROR_RELOAD_STATUS);
+        return false;
+      }
+
+      // A physical write failure preserves the in-memory change and expected token for retry.
       latestStoreRef.current = nextStore;
       setStore(nextStore);
       setActionStatus(null);
-
-      if (initialState.canSave && dependencies.storage) {
-        const saveResult = saveProgressToStorage(
-          nextStore,
-          dependencies.storage,
-        );
-        setPersistenceStatus(
-          saveResult.success
-            ? null
-            : `Progress not saved: ${saveResult.message}`,
-        );
-      }
-
+      setPersistenceStatus(`Progress not saved: ${saveResult.message}`);
       return true;
     },
-    [dependencies.storage, initialState.canSave],
+    [dependencies.storage],
   );
 
   const commitMutation = useCallback(
@@ -316,7 +412,7 @@ export function useProgressStore(options: UseProgressStoreOptions = {}) {
 
   return {
     store,
-    canSave: initialState.canSave,
+    canSave,
     persistenceStatus,
     actionStatus,
     selectGameAction,
