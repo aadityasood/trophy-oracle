@@ -1114,6 +1114,212 @@ describe('undo snapshots and isolation', () => {
   });
 });
 
+describe('tracker mutation isolation', () => {
+  it('isolates counter tracker references bidirectionally across notes mutations and undo snapshots', () => {
+    const inputStore = createPopulatedStore();
+    const result = setRunNotes(
+      inputStore,
+      mockGameStellarDrift,
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-004',
+      'signal notes',
+      TS2,
+    );
+    const resultStore = expectChanged(result);
+    expect(LocalProgressStoreV3Schema.safeParse(resultStore).success).toBe(true);
+
+    const inputProgress = getProgress(inputStore, 'stellar-drift', SET_PS, DEFAULT_RUN, 'sd-ps-004');
+    const resultProgress = getProgress(resultStore, 'stellar-drift', SET_PS, DEFAULT_RUN, 'sd-ps-004');
+    const undoSnapshot = resultStore.undoState?.['stellar-drift'];
+    expect(undoSnapshot).toBeDefined();
+    if (!undoSnapshot) throw new Error('Expected undo snapshot');
+    const undoProgress = undoSnapshot.previous.progress['sd-ps-004'];
+
+    expect(resultProgress.counter).toBeDefined();
+    expect(inputProgress.counter).toBeDefined();
+    expect(undoProgress.counter).toBeDefined();
+    expect(resultProgress.counter).not.toBe(inputProgress.counter);
+    expect(resultProgress.counter).not.toBe(undoProgress.counter);
+    expect(undoProgress.counter).not.toBe(inputProgress.counter);
+    expect(resultProgress.counter).toEqual(inputProgress.counter);
+
+    if (
+      resultProgress.counter?.certainty !== 'exact' ||
+      inputProgress.counter?.certainty !== 'exact' ||
+      undoProgress.counter?.certainty !== 'exact'
+    ) {
+      throw new Error('Expected exact counter progress');
+    }
+
+    inputProgress.counter.value = 42;
+    expect(resultProgress.counter.value).toBe(0);
+    expect(undoProgress.counter.value).toBe(0);
+
+    resultProgress.counter.value = 99;
+    expect(inputProgress.counter.value).toBe(42);
+    expect(undoProgress.counter.value).toBe(0);
+
+    undoProgress.counter.value = 77;
+    expect(resultProgress.counter.value).toBe(99);
+    expect(inputProgress.counter.value).toBe(42);
+
+    expect(resultProgress.notes).toBe('signal notes');
+    expect(undoProgress.notes).toBeUndefined();
+    expect(RunProgressSchema.safeParse(undoSnapshot.previous).success).toBe(true);
+  });
+
+  it('isolates checklist tracker references bidirectionally across notes mutations and undo snapshots', () => {
+    const inputStore = createPopulatedStore();
+    const result = setRunNotes(
+      inputStore,
+      mockGameStellarDrift,
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-005',
+      'checklist notes',
+      TS2,
+    );
+    const resultStore = expectChanged(result);
+    expect(LocalProgressStoreV3Schema.safeParse(resultStore).success).toBe(true);
+
+    const inputProgress = getProgress(inputStore, 'stellar-drift', SET_PS, DEFAULT_RUN, 'sd-ps-005');
+    const resultProgress = getProgress(resultStore, 'stellar-drift', SET_PS, DEFAULT_RUN, 'sd-ps-005');
+    const undoSnapshot = resultStore.undoState?.['stellar-drift'];
+    expect(undoSnapshot).toBeDefined();
+    if (!undoSnapshot) throw new Error('Expected undo snapshot');
+    const undoProgress = undoSnapshot.previous.progress['sd-ps-005'];
+
+    expect(resultProgress.checklistCompletion).toBeDefined();
+    expect(inputProgress.checklistCompletion).toBeDefined();
+    expect(undoProgress.checklistCompletion).toBeDefined();
+    expect(resultProgress.checklistCompletion).not.toBe(inputProgress.checklistCompletion);
+    expect(resultProgress.checklistCompletion).not.toBe(undoProgress.checklistCompletion);
+    expect(undoProgress.checklistCompletion).not.toBe(inputProgress.checklistCompletion);
+    expect(resultProgress.checklistCompletion).toEqual(inputProgress.checklistCompletion);
+
+    inputProgress.checklistCompletion!['task-a'] = true;
+    expect(resultProgress.checklistCompletion!['task-a']).toBe(false);
+    expect(undoProgress.checklistCompletion!['task-a']).toBe(false);
+
+    resultProgress.checklistCompletion!['task-b'] = true;
+    expect(inputProgress.checklistCompletion!['task-b']).toBe(false);
+    expect(undoProgress.checklistCompletion!['task-b']).toBe(false);
+
+    undoProgress.checklistCompletion!['task-c'] = true;
+    expect(resultProgress.checklistCompletion!['task-c']).toBe(false);
+    expect(inputProgress.checklistCompletion!['task-c']).toBe(false);
+
+    expect(resultProgress.notes).toBe('checklist notes');
+    expect(undoProgress.notes).toBeUndefined();
+    expect(RunProgressSchema.safeParse(undoSnapshot.previous).success).toBe(true);
+  });
+
+  it('isolates counter tracker references bidirectionally across completion override and undo snapshots', () => {
+    const inputStore = createPopulatedStore();
+    const result = setRunCompletionOverride(
+      inputStore,
+      mockGameStellarDrift,
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-004',
+      true,
+      TS2,
+    );
+    const resultStore = expectChanged(result);
+    expect(LocalProgressStoreV3Schema.safeParse(resultStore).success).toBe(true);
+
+    const inputProgress = getProgress(inputStore, 'stellar-drift', SET_PS, DEFAULT_RUN, 'sd-ps-004');
+    const resultProgress = getProgress(resultStore, 'stellar-drift', SET_PS, DEFAULT_RUN, 'sd-ps-004');
+    const undoSnapshot = resultStore.undoState?.['stellar-drift'];
+    expect(undoSnapshot).toBeDefined();
+    if (!undoSnapshot) throw new Error('Expected undo snapshot');
+    const undoProgress = undoSnapshot.previous.progress['sd-ps-004'];
+
+    expect(resultProgress.counter).toBeDefined();
+    expect(inputProgress.counter).toBeDefined();
+    expect(undoProgress.counter).toBeDefined();
+    expect(resultProgress.counter).not.toBe(inputProgress.counter);
+    expect(resultProgress.counter).not.toBe(undoProgress.counter);
+    expect(undoProgress.counter).not.toBe(inputProgress.counter);
+    expect(resultProgress.counter).toEqual(inputProgress.counter);
+
+    if (
+      resultProgress.counter?.certainty !== 'exact' ||
+      inputProgress.counter?.certainty !== 'exact' ||
+      undoProgress.counter?.certainty !== 'exact'
+    ) {
+      throw new Error('Expected exact counter progress');
+    }
+
+    inputProgress.counter.value = 42;
+    expect(resultProgress.counter.value).toBe(0);
+    expect(undoProgress.counter.value).toBe(0);
+
+    resultProgress.counter.value = 99;
+    expect(inputProgress.counter.value).toBe(42);
+    expect(undoProgress.counter.value).toBe(0);
+
+    undoProgress.counter.value = 77;
+    expect(resultProgress.counter.value).toBe(99);
+    expect(inputProgress.counter.value).toBe(42);
+
+    expect(resultProgress.manualOverride).toBe(true);
+    expect(resultProgress.completed).toBe(true);
+    expect(undoProgress.manualOverride).toBe(false);
+    expect(undoProgress.completed).toBe(false);
+    expect(RunProgressSchema.safeParse(undoSnapshot.previous).success).toBe(true);
+  });
+
+  it('isolates checklist tracker references bidirectionally across completion override and undo snapshots', () => {
+    const inputStore = createPopulatedStore();
+    const result = setRunCompletionOverride(
+      inputStore,
+      mockGameStellarDrift,
+      SET_PS,
+      DEFAULT_RUN,
+      'sd-ps-005',
+      true,
+      TS2,
+    );
+    const resultStore = expectChanged(result);
+    expect(LocalProgressStoreV3Schema.safeParse(resultStore).success).toBe(true);
+
+    const inputProgress = getProgress(inputStore, 'stellar-drift', SET_PS, DEFAULT_RUN, 'sd-ps-005');
+    const resultProgress = getProgress(resultStore, 'stellar-drift', SET_PS, DEFAULT_RUN, 'sd-ps-005');
+    const undoSnapshot = resultStore.undoState?.['stellar-drift'];
+    expect(undoSnapshot).toBeDefined();
+    if (!undoSnapshot) throw new Error('Expected undo snapshot');
+    const undoProgress = undoSnapshot.previous.progress['sd-ps-005'];
+
+    expect(resultProgress.checklistCompletion).toBeDefined();
+    expect(inputProgress.checklistCompletion).toBeDefined();
+    expect(undoProgress.checklistCompletion).toBeDefined();
+    expect(resultProgress.checklistCompletion).not.toBe(inputProgress.checklistCompletion);
+    expect(resultProgress.checklistCompletion).not.toBe(undoProgress.checklistCompletion);
+    expect(undoProgress.checklistCompletion).not.toBe(inputProgress.checklistCompletion);
+    expect(resultProgress.checklistCompletion).toEqual(inputProgress.checklistCompletion);
+
+    inputProgress.checklistCompletion!['task-a'] = true;
+    expect(resultProgress.checklistCompletion!['task-a']).toBe(false);
+    expect(undoProgress.checklistCompletion!['task-a']).toBe(false);
+
+    resultProgress.checklistCompletion!['task-b'] = true;
+    expect(inputProgress.checklistCompletion!['task-b']).toBe(false);
+    expect(undoProgress.checklistCompletion!['task-b']).toBe(false);
+
+    undoProgress.checklistCompletion!['task-c'] = true;
+    expect(resultProgress.checklistCompletion!['task-c']).toBe(false);
+    expect(inputProgress.checklistCompletion!['task-c']).toBe(false);
+
+    expect(resultProgress.manualOverride).toBe(true);
+    expect(resultProgress.completed).toBe(true);
+    expect(undoProgress.manualOverride).toBe(false);
+    expect(undoProgress.completed).toBe(false);
+    expect(RunProgressSchema.safeParse(undoSnapshot.previous).success).toBe(true);
+  });
+});
+
 describe('no-ops and stale completion repair', () => {
   it('returns the original store reference for effective no-ops and preserves undo', () => {
     let store = createPopulatedStore();
