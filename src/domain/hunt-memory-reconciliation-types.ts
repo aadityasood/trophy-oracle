@@ -10,6 +10,7 @@ export type RunReconciliationDelta = {
   addedAchievementIds: string[];
   quarantinedAchievementIds: string[];
   restoredOrphanedAchievementIds: string[];
+  repairedDerivedCompletionIds: string[];
   addedChecklistItems: ChecklistItemDeltaV3[];
   removedChecklistItems: ChecklistItemDeltaV3[];
   removedPinnedAchievementIds: string[];
@@ -40,7 +41,7 @@ export type HuntMemoryReconciliationResult = {
   report: ReconciliationDeltaReportV3;
 };
 
-export type ConflictRuleNumber = 1 | 6 | 8 | 11;
+export type ConflictRuleNumber = 1 | 3 | 6 | 8 | 11;
 
 export type TrackedSchemaConflict = {
   rule: ConflictRuleNumber;

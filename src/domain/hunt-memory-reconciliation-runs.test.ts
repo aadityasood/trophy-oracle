@@ -351,6 +351,7 @@ describe('hunt-memory-reconciliation runs', () => {
         addedAchievementIds: [],
         quarantinedAchievementIds: [],
         restoredOrphanedAchievementIds: [],
+        repairedDerivedCompletionIds: [],
         addedChecklistItems: [],
         removedChecklistItems: [],
         removedPinnedAchievementIds: [],
