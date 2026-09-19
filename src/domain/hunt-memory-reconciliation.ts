@@ -100,6 +100,7 @@ function initializeMissingGameProgress(
         addedAchievementIds: nextSet.achievements.map((item) => item.id).sort(),
         quarantinedAchievementIds: [],
         restoredOrphanedAchievementIds: [],
+        repairedDerivedCompletionIds: [],
         addedChecklistItems: groupChecklistDeltas(checklistMap),
         removedChecklistItems: [],
         removedPinnedAchievementIds: [],
@@ -452,6 +453,7 @@ export function reconcileHuntMemoryGameProgress(
             runDelta.addedAchievementIds.length > 0 ||
             runDelta.quarantinedAchievementIds.length > 0 ||
             runDelta.restoredOrphanedAchievementIds.length > 0 ||
+            runDelta.repairedDerivedCompletionIds.length > 0 ||
             runDelta.addedChecklistItems.length > 0 ||
             runDelta.removedChecklistItems.length > 0 ||
             runDelta.removedPinnedAchievementIds.length > 0;
@@ -496,6 +498,7 @@ export function reconcileHuntMemoryGameProgress(
             .sort(),
           quarantinedAchievementIds: [],
           restoredOrphanedAchievementIds: [],
+          repairedDerivedCompletionIds: [],
           addedChecklistItems: groupChecklistDeltas(checklistMap),
           removedChecklistItems: [],
           removedPinnedAchievementIds: [],
@@ -544,6 +547,7 @@ export function reconcileHuntMemoryGameProgress(
             .sort(),
           quarantinedAchievementIds: [],
           restoredOrphanedAchievementIds: [],
+          repairedDerivedCompletionIds: [],
           addedChecklistItems: groupChecklistDeltas(checklistMap),
           removedChecklistItems: [],
           removedPinnedAchievementIds: [],

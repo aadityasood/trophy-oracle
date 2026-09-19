@@ -20,7 +20,8 @@ function deepClone<T>(value: T): T {
   return structuredClone(value);
 }
 
-export { validateTrackerShape } from './hunt-memory-tracker-shape';
+import { validateTrackerShape } from './hunt-memory-tracker-shape';
+export { validateTrackerShape };
 
 export function createEmptyRunDelta(runId: string): RunReconciliationDelta {
   return {
@@ -28,6 +29,7 @@ export function createEmptyRunDelta(runId: string): RunReconciliationDelta {
     addedAchievementIds: [],
     quarantinedAchievementIds: [],
     restoredOrphanedAchievementIds: [],
+    repairedDerivedCompletionIds: [],
     addedChecklistItems: [],
     removedChecklistItems: [],
     removedPinnedAchievementIds: [],
@@ -49,6 +51,18 @@ export function groupChecklistDeltas(
     }
   }
   return result;
+}
+
+function inferRepresentedTrackingMode(
+  progress: AchievementProgressV3,
+): 'binary' | 'counter' | 'checklist' {
+  if (progress.counter !== undefined) {
+    return 'counter';
+  }
+  if (progress.checklistCompletion !== undefined) {
+    return 'checklist';
+  }
+  return 'binary';
 }
 
 function createOrphanFromActiveProgress(
@@ -292,6 +306,7 @@ export function reconcileSingleRunProgress(
   const addedAchievementIds: string[] = [];
   const quarantinedAchievementIds: string[] = [];
   const restoredOrphanedAchievementIds: string[] = [];
+  const repairedDerivedCompletionIds: string[] = [];
   const addedChecklistMap = new Map<string, string[]>();
   const removedChecklistMap = new Map<string, string[]>();
   const removedPinnedAchievementIds: string[] = [];
@@ -300,6 +315,47 @@ export function reconcileSingleRunProgress(
     const previousAchievement = previousAchievements.get(achievementId);
     const nextAchievement = nextAchievements.get(achievementId);
     const hasActiveProgress = Object.hasOwn(runProgress.progress, achievementId);
+
+    if (hasActiveProgress) {
+      const currentProgress = runProgress.progress[achievementId];
+      const isAdmitted =
+        previousAchievement !== undefined &&
+        validateTrackerShape(currentProgress, previousAchievement.tracking);
+
+      if (!isAdmitted) {
+        const representedMode = inferRepresentedTrackingMode(currentProgress);
+        const orphan = createOrphanFromActiveProgress(
+          currentProgress,
+          representedMode,
+        );
+        if (!Object.hasOwn(runProgress.orphanedProgress, achievementId)) {
+          runProgress.orphanedProgress[achievementId] = [];
+        }
+        runProgress.orphanedProgress[achievementId].push(orphan);
+        delete runProgress.progress[achievementId];
+        quarantinedAchievementIds.push(achievementId);
+
+        if (runProgress.pinnedAchievementIds.includes(achievementId)) {
+          runProgress.pinnedAchievementIds =
+            runProgress.pinnedAchievementIds.filter((id) => id !== achievementId);
+          if (!removedPinnedAchievementIds.includes(achievementId)) {
+            removedPinnedAchievementIds.push(achievementId);
+          }
+        }
+
+        conflicts.push({
+          rule: 3,
+          identityKey: `${setId}:${runProgress.runId}:${achievementId}`,
+          message: `Active progress for '${achievementId}' in set '${setId}', run '${runProgress.runId}' is incompatible with previous definition`,
+        });
+
+        if (nextAchievement) {
+          runProgress.progress[achievementId] =
+            createDefaultAchievementProgressV3(nextAchievement, timestamp);
+        }
+        continue;
+      }
+    }
 
     if (previousAchievement && !nextAchievement) {
       if (hasActiveProgress) {
@@ -320,7 +376,9 @@ export function reconcileSingleRunProgress(
         runProgress.pinnedAchievementIds = runProgress.pinnedAchievementIds.filter(
           (pinId) => pinId !== achievementId,
         );
-        removedPinnedAchievementIds.push(achievementId);
+        if (!removedPinnedAchievementIds.includes(achievementId)) {
+          removedPinnedAchievementIds.push(achievementId);
+        }
       }
       continue;
     }
@@ -416,7 +474,9 @@ export function reconcileSingleRunProgress(
           runProgress.pinnedAchievementIds = runProgress.pinnedAchievementIds.filter(
             (pinId) => pinId !== achievementId,
           );
-          removedPinnedAchievementIds.push(achievementId);
+          if (!removedPinnedAchievementIds.includes(achievementId)) {
+            removedPinnedAchievementIds.push(achievementId);
+          }
         }
 
         runProgress.progress[achievementId] = createDefaultAchievementProgressV3(
@@ -438,6 +498,7 @@ export function reconcileSingleRunProgress(
         delete currentProgress.checklistCompletion;
       } else if (nextAchievement.tracking.mode === 'counter') {
         delete currentProgress.checklistCompletion;
+        const prevCompleted = currentProgress.completed;
         if (currentProgress.manualOverride) {
           currentProgress.completed = true;
         } else {
@@ -446,13 +507,20 @@ export function reconcileSingleRunProgress(
             currentProgress,
           );
         }
+        if (currentProgress.completed !== prevCompleted) {
+          repairedDerivedCompletionIds.push(achievementId);
+        }
       } else {
+        const prevCompleted = currentProgress.completed;
         reconcileActiveChecklistProgress(
           nextAchievement,
           currentProgress,
           addedChecklistMap,
           removedChecklistMap,
         );
+        if (currentProgress.completed !== prevCompleted) {
+          repairedDerivedCompletionIds.push(achievementId);
+        }
       }
     }
   }
@@ -464,6 +532,7 @@ export function reconcileSingleRunProgress(
     addedAchievementIds: addedAchievementIds.sort(),
     quarantinedAchievementIds: quarantinedAchievementIds.sort(),
     restoredOrphanedAchievementIds: restoredOrphanedAchievementIds.sort(),
+    repairedDerivedCompletionIds: repairedDerivedCompletionIds.sort(),
     addedChecklistItems: groupChecklistDeltas(addedChecklistMap),
     removedChecklistItems: groupChecklistDeltas(removedChecklistMap),
     removedPinnedAchievementIds: removedPinnedAchievementIds.sort(),
@@ -556,6 +625,7 @@ export function restoreSchema2AbsentOrphansRun(
     addedAchievementIds: addedAchievementIds.sort(),
     quarantinedAchievementIds: [],
     restoredOrphanedAchievementIds: restoredOrphanedAchievementIds.sort(),
+    repairedDerivedCompletionIds: [],
     addedChecklistItems: groupChecklistDeltas(addedChecklistMap),
     removedChecklistItems: groupChecklistDeltas(removedChecklistMap),
     removedPinnedAchievementIds: [],
