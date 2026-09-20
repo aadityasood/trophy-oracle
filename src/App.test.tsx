@@ -111,13 +111,17 @@ describe('App foundation and tracker integration', () => {
     await user.click(screen.getByRole('button', { name: /Stellar Drift/ }));
     const card = screen.getByRole('article', { name: 'Achievement 4' });
 
-    expect(within(card).getByText(/0 \/ 48 \(48 remaining\)/)).toBeInTheDocument();
+    expect(
+      within(card).getByText('Progress: 0 / 48 (48 remaining, 0%)'),
+    ).toBeInTheDocument();
     await user.click(
       within(card).getByRole('button', {
         name: 'Add 5 to counter for Achievement 4',
       }),
     );
-    expect(within(card).getByText(/5 \/ 48 \(43 remaining\)/)).toBeInTheDocument();
+    expect(
+      within(card).getByText('Progress: 5 / 48 (43 remaining, 10%)'),
+    ).toBeInTheDocument();
 
     const input = within(card).getByRole('spinbutton', {
       name: 'Set counter for Achievement 4',
@@ -136,7 +140,9 @@ describe('App foundation and tracker integration', () => {
         name: 'Decrease counter for Achievement 4',
       }),
     );
-    expect(within(card).getByText(/47 \/ 48 \(1 remaining\)/)).toBeInTheDocument();
+    expect(
+      within(card).getByText('Progress: 47 / 48 (1 remaining, 97%)'),
+    ).toBeInTheDocument();
     expect(within(card).getByText('State: Incomplete')).toBeInTheDocument();
   });
 

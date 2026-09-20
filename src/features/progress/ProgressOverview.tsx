@@ -10,9 +10,10 @@ import type { LocalProgressStore } from '../../domain/progress-schema';
 import {
   getOracleFocus,
   getPinnedAchievements,
+  getProgressSummary,
+  getRiskLabel,
   getStageSummaries,
   hasPartialProgress,
-  hasUrgency,
   resolveActiveStage,
   type StageId,
 } from '../../domain/progress-view';
@@ -247,38 +248,11 @@ export function ProgressOverview({
               }
 
               const counterValue = progress.counterValue ?? 0;
-              const counterTarget =
-                achievement.tracking.mode === 'counter'
-                  ? achievement.tracking.target
-                  : undefined;
-              const counterRemaining =
-                counterTarget !== undefined
-                  ? Math.max(0, counterTarget - counterValue)
-                  : undefined;
-              const counterPct =
-                counterTarget !== undefined && counterTarget > 0
-                  ? Math.min(
-                      100,
-                      Math.floor((counterValue / counterTarget) * 100),
-                    )
-                  : undefined;
-
               const checklistItems =
                 achievement.tracking.mode === 'checklist'
                   ? achievement.tracking.items
                   : [];
-              const checklistCompletedCount = checklistItems.filter(
-                (item) => progress.checklistCompletion?.[item.id] === true,
-              ).length;
-              const checklistTotalCount = checklistItems.length;
-              const checklistRemainingCount =
-                checklistTotalCount - checklistCompletedCount;
-              const checklistPct =
-                checklistTotalCount > 0
-                  ? Math.floor(
-                      (checklistCompletedCount / checklistTotalCount) * 100,
-                    )
-                  : 0;
+              const progressSummary = getProgressSummary(achievement, progress);
 
               return (
                 <article
@@ -378,9 +352,7 @@ export function ProgressOverview({
                     {achievement.tracking.mode === 'counter' && (
                       <div className="space-y-2">
                         <p className="text-xs font-medium text-slate-300">
-                          {counterTarget === undefined
-                            ? `Progress: ${counterValue} ${achievement.tracking.unit} (open counter)`
-                            : `Progress: ${counterValue} / ${counterTarget} (${counterRemaining} remaining, ${counterPct}%)`}
+                          {progressSummary}
                         </p>
                         <div className="flex flex-wrap items-center gap-2">
                           <button
@@ -423,9 +395,7 @@ export function ProgressOverview({
                     {achievement.tracking.mode === 'checklist' && (
                       <div className="space-y-2">
                         <p className="text-xs font-medium text-slate-300">
-                          Progress: {checklistCompletedCount} /{' '}
-                          {checklistTotalCount} items (
-                          {checklistRemainingCount} remaining, {checklistPct}%)
+                          {progressSummary}
                         </p>
                         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                           {checklistItems.map((item, itemIdx) => {
@@ -514,7 +484,7 @@ export function ProgressOverview({
                 activeSetProgress.pinnedAchievementIds.includes(
                   achievement.id,
                 );
-              const urgent = hasUrgency(achievement);
+              const riskLabel = getRiskLabel(achievement);
               const isStageMatch = achievement.expectedStage === activeStage;
               const partial = hasPartialProgress(achievement, progress);
 
@@ -529,9 +499,9 @@ export function ProgressOverview({
                       <span className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] uppercase text-slate-300">
                         {achievement.expectedStage}
                       </span>
-                      {urgent && (
+                      {riskLabel && (
                         <span className="rounded border border-amber-800 bg-amber-950 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
-                          Urgent / Missable
+                          {riskLabel}
                         </span>
                       )}
                       {isStageMatch && (

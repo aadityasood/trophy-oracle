@@ -13,7 +13,6 @@ import {
   getPinnedAchievements,
   getStageSummaries,
   hasPartialProgress,
-  hasUrgency,
   resolveActiveStage,
 } from './progress-view';
 import {
@@ -22,6 +21,19 @@ import {
 } from '../test/progress-fixtures';
 
 const sampleSet: AchievementSet = mockGameStellarDrift.achievementSets[0];
+
+const baseAchievement: AchievementRecord = {
+  id: 'base-01',
+  name: 'Base Achievement',
+  description: 'Desc',
+  evidence: 'Ev',
+  reward: { type: 'trophy', grade: 'bronze' },
+  tracking: { mode: 'binary' },
+  labels: ['story'],
+  expectedStage: 'story',
+  confidence: 1,
+  prerequisites: [],
+};
 
 describe('progress-view pure selectors', () => {
   describe('stage summaries and active stage', () => {
@@ -191,44 +203,7 @@ describe('progress-view pure selectors', () => {
     });
   });
 
-  describe('urgency and partial progress helpers', () => {
-    it('detects urgency from warnings, point_of_no_return, or missable labels', () => {
-      const achWarning: AchievementRecord = {
-        id: 'w-01',
-        name: 'Warning',
-        description: 'Desc',
-        evidence: 'Ev',
-        reward: { type: 'trophy', grade: 'bronze' },
-        tracking: { mode: 'binary' },
-        labels: ['story'],
-        expectedStage: 'story',
-        confidence: 1,
-        prerequisites: [],
-        warning: 'Careful here',
-      };
-      expect(hasUrgency(achWarning)).toBe(true);
-
-      const achMissable: AchievementRecord = {
-        ...achWarning,
-        warning: undefined,
-        labels: ['missable'],
-      };
-      expect(hasUrgency(achMissable)).toBe(true);
-
-      const achPonr: AchievementRecord = {
-        ...achWarning,
-        warning: undefined,
-        labels: ['point_of_no_return'],
-      };
-      expect(hasUrgency(achPonr)).toBe(true);
-
-      const achNormal: AchievementRecord = {
-        ...achWarning,
-        warning: undefined,
-        labels: ['story'],
-      };
-      expect(hasUrgency(achNormal)).toBe(false);
-    });
+  describe('partial progress and prerequisite helpers', () => {
 
     it('detects partial progress on counters and checklists, but not on binary or completed achievements', () => {
       const counterAch: AchievementRecord = {
@@ -301,6 +276,12 @@ describe('progress-view pure selectors', () => {
         checklistCompletion: { i1: false, i2: false },
       };
       expect(hasPartialProgress(checklistAch, clNone)).toBe(false);
+
+      const clStale: AchievementProgress = {
+        ...clProgress,
+        checklistCompletion: { i1: false, i2: false, 'unrelated-key': true },
+      };
+      expect(hasPartialProgress(checklistAch, clStale)).toBe(false);
     });
 
     it('checks prerequisites accurately', () => {
@@ -427,6 +408,71 @@ describe('progress-view pure selectors', () => {
 
       expect(focus[0].id).toBe('a-urgent');
       expect(focus[1].id).toBe('a-story');
+    });
+
+    it('does not grant urgency to warning-only achievements and preserves active-stage priority over them', () => {
+      const customSet: AchievementSet = {
+        id: 'test-warning-only-no-urgency',
+        platform: 'playstation',
+        version: '1.0',
+        achievements: [
+          {
+            ...baseAchievement,
+            id: 'a-caution-cleanup',
+            labels: ['online'],
+            expectedStage: 'cleanup',
+            warning: 'Server closes at the end of the month',
+          },
+          {
+            ...baseAchievement,
+            id: 'a-story-active',
+            expectedStage: 'story',
+          },
+        ],
+      };
+
+      const setProgress = createDefaultAchievementSetProgress(
+        customSet,
+        MOCK_TIMESTAMP,
+      );
+      setProgress.activeStage = 'story';
+
+      const focus = getOracleFocus(customSet, setProgress);
+
+      expect(focus[0].id).toBe('a-story-active');
+      expect(focus[1].id).toBe('a-caution-cleanup');
+    });
+
+    it('prioritizes point_of_no_return achievements over active-stage matches', () => {
+      const customSet: AchievementSet = {
+        id: 'test-ponr-urgency',
+        platform: 'playstation',
+        version: '1.0',
+        achievements: [
+          {
+            ...baseAchievement,
+            id: 'a-story-active',
+            expectedStage: 'story',
+          },
+          {
+            ...baseAchievement,
+            id: 'a-ponr-missable-stage',
+            labels: ['point_of_no_return'],
+            expectedStage: 'missables',
+          },
+        ],
+      };
+
+      const setProgress = createDefaultAchievementSetProgress(
+        customSet,
+        MOCK_TIMESTAMP,
+      );
+      setProgress.activeStage = 'story';
+
+      const focus = getOracleFocus(customSet, setProgress);
+
+      expect(focus[0].id).toBe('a-ponr-missable-stage');
+      expect(focus[1].id).toBe('a-story-active');
     });
 
     it('prioritizes active-stage match after urgency', () => {
