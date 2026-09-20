@@ -6,6 +6,7 @@ import type {
   PlatformReward,
 } from '../../domain/achievement-schema';
 import type { LocalProgressStore } from '../../domain/progress-schema';
+import { getProgressSummary } from '../../domain/progress-view';
 
 export interface AchievementTrackerProps {
   game: GameRecord;
@@ -190,14 +191,7 @@ export function AchievementTracker({
             }
 
             const counterValue = progress.counterValue ?? 0;
-            const counterTarget =
-              achievement.tracking.mode === 'counter'
-                ? achievement.tracking.target
-                : undefined;
-            const remaining =
-              counterTarget === undefined
-                ? undefined
-                : Math.max(0, counterTarget - counterValue);
+            const progressSummary = getProgressSummary(achievement, progress);
             const counterDraft = getDraft(
               counterDrafts,
               achievement.id,
@@ -347,9 +341,7 @@ export function AchievementTracker({
                   {achievement.tracking.mode === 'counter' && (
                     <div className="space-y-2">
                       <p className="text-xs font-medium text-slate-300">
-                        {counterTarget === undefined
-                          ? `Progress: ${counterValue} ${achievement.tracking.unit} (open counter)`
-                          : `Progress: ${counterValue} / ${counterTarget} (${remaining} remaining)`}
+                        {progressSummary}
                       </p>
                       <div className="flex flex-wrap items-end gap-2">
                         <button
@@ -429,6 +421,9 @@ export function AchievementTracker({
                       <legend className="text-xs font-semibold text-slate-400">
                         Checklist for {displayLabel}
                       </legend>
+                      <p className="text-xs font-medium text-slate-300">
+                        {progressSummary}
+                      </p>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {achievement.tracking.items.map((item, itemIndex) => {
                           const itemLabel = isRevealed

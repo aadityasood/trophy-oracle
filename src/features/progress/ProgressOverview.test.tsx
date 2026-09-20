@@ -2,6 +2,10 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import type {
+  AchievementSet,
+  GameRecord,
+} from '../../domain/achievement-schema';
 import {
   createDefaultLocalProgressStore,
   ensureGameAndSetInitialized,
@@ -440,9 +444,8 @@ describe('ProgressOverview', () => {
       ).toBe(true);
     });
 
-    it('shows urgent/missable badge and prioritizes unlocked missable achievement', () => {
+    it('shows Missable badge and prioritizes unlocked missable achievement', () => {
       const store = createStore();
-      // Complete sd-ps-001 -> unlocks sd-ps-002 (missable with warning)
       store.gameProgress['stellar-drift'].sets[
         'stellar-drift-ps'
       ].progress['sd-ps-001'].completed = true;
@@ -452,9 +455,82 @@ describe('ProgressOverview', () => {
       const recs = screen.getAllByRole('article', {
         name: /Oracle recommendation:/,
       });
-      // sd-ps-002 is top recommendation
-      expect(within(recs[0]).getByText('Urgent / Missable')).toBeInTheDocument();
+      expect(within(recs[0]).getByText('Missable')).toBeInTheDocument();
+      expect(within(recs[0]).queryByText('Urgent / Missable')).not.toBeInTheDocument();
       expect(within(recs[0]).getByText('Achievement 2')).toBeInTheDocument();
+    });
+
+    it('shows Point of no return badge for point_of_no_return achievements and never Urgent / Missable', () => {
+      const customSet: AchievementSet = {
+        ...psSet,
+        id: 'test-ponr-set',
+        achievements: [
+          {
+            ...psSet.achievements[0],
+            id: 'ach-ponr',
+            labels: ['missable', 'point_of_no_return'],
+            expectedStage: 'missables',
+          },
+        ],
+      };
+      const customGame: GameRecord = {
+        ...mockGameStellarDrift,
+        id: 'ponr-game',
+        achievementSets: [customSet],
+      };
+      const store = ensureGameAndSetInitialized(
+        createDefaultLocalProgressStore(),
+        customGame,
+        customSet.id,
+        MOCK_TIMESTAMP,
+      );
+
+      renderOverview({ game: customGame, set: customSet, store });
+
+      const recs = screen.getAllByRole('article', {
+        name: /Oracle recommendation:/,
+      });
+      expect(within(recs[0]).getByText('Point of no return')).toBeInTheDocument();
+      expect(within(recs[0]).queryByText('Missable')).not.toBeInTheDocument();
+      expect(within(recs[0]).queryByText('Urgent / Missable')).not.toBeInTheDocument();
+    });
+
+    it('renders Caution badge for warning-only achievements while keeping exact warning text absent before reveal', () => {
+      const customSet: AchievementSet = {
+        ...psSet,
+        id: 'test-caution-set',
+        achievements: [
+          {
+            ...psSet.achievements[0],
+            id: 'ach-caution',
+            labels: ['online'],
+            expectedStage: 'story',
+            warning: 'Server closes next month',
+          },
+        ],
+      };
+      const customGame: GameRecord = {
+        ...mockGameStellarDrift,
+        id: 'caution-game',
+        achievementSets: [customSet],
+      };
+      const store = ensureGameAndSetInitialized(
+        createDefaultLocalProgressStore(),
+        customGame,
+        customSet.id,
+        MOCK_TIMESTAMP,
+      );
+
+      renderOverview({ game: customGame, set: customSet, store });
+
+      const recs = screen.getAllByRole('article', {
+        name: /Oracle recommendation:/,
+      });
+      expect(within(recs[0]).getByText('Caution')).toBeInTheDocument();
+      expect(within(recs[0]).queryByText('Missable')).not.toBeInTheDocument();
+      expect(within(recs[0]).queryByText('Point of no return')).not.toBeInTheDocument();
+      expect(within(recs[0]).queryByText('Urgent / Missable')).not.toBeInTheDocument();
+      expect(screen.queryByText('Server closes next month')).not.toBeInTheDocument();
     });
 
     it('keeps exact Oracle recommendation fields absent before reveal', () => {

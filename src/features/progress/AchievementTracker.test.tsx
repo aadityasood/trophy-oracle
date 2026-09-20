@@ -147,7 +147,9 @@ describe('AchievementTracker', () => {
     const user = userEvent.setup();
     const callbacks = renderTracker();
 
-    expect(screen.getByText(/0 \/ 48 \(48 remaining\)/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Progress: 0 / 48 (48 remaining, 0%)'),
+    ).toBeInTheDocument();
     await user.click(
       screen.getByRole('button', {
         name: 'Add 5 to counter for Achievement 3',
@@ -352,5 +354,50 @@ describe('AchievementTracker', () => {
     expect(
       screen.getByText('Cannot pin more than 5 achievements per set'),
     ).toBeInTheDocument();
+  });
+
+  it('renders shared bounded counter percentage and clamps over-target values', () => {
+    const store = createStore();
+    store.gameProgress['stellar-drift'].sets[
+      'stellar-drift-ps'
+    ].progress['sd-ps-004'].counterValue = 53;
+
+    renderTracker({ store });
+
+    expect(
+      screen.getByText('Progress: 53 / 48 (0 remaining, 100%)'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders shared checklist progress summary and derives counts strictly from definition items', () => {
+    const store = createStore();
+    store.gameProgress['stellar-drift'].sets[
+      'stellar-drift-ps'
+    ].progress['sd-ps-005'].checklistCompletion = {
+      'task-a': true,
+      'task-b': false,
+      'task-c': false,
+      'unexpected-extra': true,
+    };
+
+    renderTracker({ store });
+
+    expect(
+      screen.getByText('Progress: 1 / 3 items (2 remaining, 33%)'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders shared open counter progress summary without remaining or percentage claims', () => {
+    const store = createStore();
+    store.gameProgress['stellar-drift'].sets[
+      'stellar-drift-ps'
+    ].progress['sd-ps-006'].counterValue = 3;
+
+    renderTracker({ store });
+
+    const openSummary = screen.getByText('Progress: 3 duels (open counter)');
+    expect(openSummary).toBeInTheDocument();
+    expect(openSummary.textContent).not.toContain('remaining');
+    expect(openSummary.textContent).not.toContain('%');
   });
 });

@@ -91,10 +91,63 @@ export function getPinnedAchievements(
   return pinned;
 }
 
+export type RiskLabel = 'Point of no return' | 'Missable' | 'Caution';
+
+export function getRiskLabel(
+  achievement: AchievementRecord,
+): RiskLabel | undefined {
+  if (achievement.labels.includes('point_of_no_return')) {
+    return 'Point of no return';
+  }
+  if (achievement.labels.includes('missable')) {
+    return 'Missable';
+  }
+  if (
+    achievement.warning !== undefined &&
+    achievement.warning.trim().length > 0
+  ) {
+    return 'Caution';
+  }
+  return undefined;
+}
+
+export function getProgressSummary(
+  achievement: AchievementRecord,
+  progress?: AchievementProgress,
+): string | undefined {
+  if (achievement.tracking.mode === 'counter') {
+    const value = progress?.counterValue ?? 0;
+    const target = achievement.tracking.target;
+    if (target === undefined) {
+      return `Progress: ${value} ${achievement.tracking.unit} (open counter)`;
+    }
+    const remaining = Math.max(0, target - value);
+    const pct =
+      target > 0 ? Math.min(100, Math.floor((value / target) * 100)) : 0;
+    return `Progress: ${value} / ${target} (${remaining} remaining, ${pct}%)`;
+  }
+
+  if (achievement.tracking.mode === 'checklist') {
+    const items = achievement.tracking.items;
+    const totalCount = items.length;
+    const checklistCompletion = progress?.checklistCompletion;
+    const completedCount = items.filter(
+      (item) =>
+        checklistCompletion !== undefined &&
+        Object.hasOwn(checklistCompletion, item.id) &&
+        checklistCompletion[item.id] === true,
+    ).length;
+    const remainingCount = totalCount - completedCount;
+    const pct =
+      totalCount > 0 ? Math.floor((completedCount / totalCount) * 100) : 0;
+    return `Progress: ${completedCount} / ${totalCount} items (${remainingCount} remaining, ${pct}%)`;
+  }
+
+  return undefined;
+}
+
 export function hasUrgency(achievement: AchievementRecord): boolean {
   return (
-    (achievement.warning !== undefined &&
-      achievement.warning.trim().length > 0) ||
     achievement.labels.includes('point_of_no_return') ||
     achievement.labels.includes('missable')
   );
@@ -109,9 +162,12 @@ export function hasPartialProgress(
     return (progress.counterValue ?? 0) > 0;
   }
   if (achievement.tracking.mode === 'checklist') {
-    return (
-      progress.checklistCompletion !== undefined &&
-      Object.values(progress.checklistCompletion).some((v) => v === true)
+    if (progress.checklistCompletion === undefined) return false;
+    const checklistCompletion = progress.checklistCompletion;
+    return achievement.tracking.items.some(
+      (item) =>
+        Object.hasOwn(checklistCompletion, item.id) &&
+        checklistCompletion[item.id] === true,
     );
   }
   return false;
