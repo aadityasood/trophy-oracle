@@ -571,5 +571,37 @@ describe('ProgressOverview', () => {
         screen.getByText(/No Oracle Focus recommendations available/i),
       ).toBeInTheDocument();
     });
+
+    it('shares reveal state between Focus Board and Oracle Focus for the same achievement', async () => {
+      const user = userEvent.setup();
+      const store = createStore();
+      store.gameProgress['stellar-drift'].sets[
+        'stellar-drift-ps'
+      ].pinnedAchievementIds = ['sd-ps-001'];
+
+      renderOverview({ store });
+
+      const focusCard = screen.getByRole('article', {
+        name: 'Focus item: Achievement 1',
+      });
+      const oracleCard = screen.getByRole('article', {
+        name: 'Oracle recommendation: Achievement 1',
+      });
+
+      expect(screen.queryByText('First Burn')).not.toBeInTheDocument();
+      expect(screen.queryByText('Tutorial race')).not.toBeInTheDocument();
+      expect(within(focusCard).getByText('Achievement 1')).toBeInTheDocument();
+      expect(within(oracleCard).getByText('Achievement 1')).toBeInTheDocument();
+
+      const revealButton = within(oracleCard).getByRole('button', {
+        name: 'Reveal details for Achievement 1',
+      });
+      await user.click(revealButton);
+
+      expect(within(focusCard).getByText('First Burn')).toBeInTheDocument();
+      expect(within(focusCard).getByText('Tutorial race')).toBeInTheDocument();
+      expect(within(oracleCard).getByText('First Burn')).toBeInTheDocument();
+      expect(within(oracleCard).getByText('Tutorial race')).toBeInTheDocument();
+    });
   });
 });
