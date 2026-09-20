@@ -335,7 +335,6 @@ export default function App({
 
             {selectedSet && (
               <div className="space-y-6">
-                {/* Progress Overview (Roadmap + Focus Board + Oracle Focus) */}
                 <ProgressOverview
                   key={`overview-${selectedGame.id}:${selectedSet.id}`}
                   game={selectedGame}
@@ -385,7 +384,6 @@ export default function App({
                   isReadOnly={isSetVersionMismatch}
                 />
 
-                {/* Tracker Workbench */}
                 <AchievementTracker
                   key={`${selectedGame.id}:${selectedSet.id}`}
                   game={selectedGame}

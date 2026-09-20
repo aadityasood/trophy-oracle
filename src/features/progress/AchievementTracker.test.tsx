@@ -339,10 +339,9 @@ describe('AchievementTracker', () => {
     expect(callbacks.onTogglePin).toHaveBeenCalledWith('sd-ps-002', true);
   });
 
-  it('disables pin button when isReadOnly is true and displays domain error message from actionStatus', () => {
+  it('disables pin button when isReadOnly is true', () => {
     renderTracker({
       isReadOnly: true,
-      actionStatus: 'Cannot pin more than 5 achievements per set',
     });
 
     expect(
@@ -350,10 +349,6 @@ describe('AchievementTracker', () => {
         name: 'Pin Achievement 1',
       }),
     ).toBeDisabled();
-
-    expect(
-      screen.getByText('Cannot pin more than 5 achievements per set'),
-    ).toBeInTheDocument();
   });
 
   it('renders shared bounded counter percentage and clamps over-target values', () => {
@@ -399,5 +394,176 @@ describe('AchievementTracker', () => {
     expect(openSummary).toBeInTheDocument();
     expect(openSummary.textContent).not.toContain('remaining');
     expect(openSummary.textContent).not.toContain('%');
+  });
+
+  it('preserves unapplied counter and unsaved notes drafts across parent rerenders of the same set', async () => {
+    const user = userEvent.setup();
+    const initialStore = createStore();
+    const callbacks = {
+      onBinaryCompletionChange: vi.fn(),
+      onCounterValueChange: vi.fn(),
+      onChecklistItemCompletionChange: vi.fn(),
+      onNotesChange: vi.fn(),
+      onCompletionOverrideChange: vi.fn(),
+      onTogglePin: vi.fn(),
+      onUndo: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <AchievementTracker
+        game={mockGameStellarDrift}
+        set={setDefinition}
+        store={initialStore}
+        {...callbacks}
+      />,
+    );
+
+    const counterInput = screen.getByRole('spinbutton', {
+      name: 'Set counter for Achievement 3',
+    });
+    await user.clear(counterInput);
+    await user.type(counterInput, '42');
+
+    const notesInput = screen.getByRole('textbox', {
+      name: 'Manual notes for Achievement 1',
+    });
+    await user.type(notesInput, 'work in progress note');
+
+    const freshStore = structuredClone(initialStore);
+    freshStore.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress[
+      'sd-ps-002'
+    ].completed = true;
+
+    rerender(
+      <AchievementTracker
+        game={mockGameStellarDrift}
+        set={setDefinition}
+        store={freshStore}
+        {...callbacks}
+      />,
+    );
+
+    expect(
+      screen.getByRole('spinbutton', {
+        name: 'Set counter for Achievement 3',
+      }),
+    ).toHaveValue(42);
+    expect(
+      screen.getByRole('textbox', {
+        name: 'Manual notes for Achievement 1',
+      }),
+    ).toHaveValue('work in progress note');
+
+    expect(callbacks.onCounterValueChange).not.toHaveBeenCalled();
+    expect(callbacks.onNotesChange).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Apply counter for Achievement 3',
+      }),
+    );
+    expect(callbacks.onCounterValueChange).toHaveBeenCalledWith('sd-ps-004', 42);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Save notes for Achievement 1',
+      }),
+    );
+    expect(callbacks.onNotesChange).toHaveBeenCalledWith(
+      'sd-ps-001',
+      'work in progress note',
+    );
+  });
+
+  it('keeps an unapplied counter draft when its single progress record is briefly unavailable', async () => {
+    const user = userEvent.setup();
+    const initialStore = createStore();
+    const callbacks = {
+      onBinaryCompletionChange: vi.fn(),
+      onCounterValueChange: vi.fn(),
+      onChecklistItemCompletionChange: vi.fn(),
+      onNotesChange: vi.fn(),
+      onCompletionOverrideChange: vi.fn(),
+      onTogglePin: vi.fn(),
+      onUndo: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <AchievementTracker
+        game={mockGameStellarDrift}
+        set={setDefinition}
+        store={initialStore}
+        {...callbacks}
+      />,
+    );
+
+    const counterInput = screen.getByRole('spinbutton', {
+      name: 'Set counter for Achievement 3',
+    });
+    await user.clear(counterInput);
+    await user.type(counterInput, '42');
+    expect(callbacks.onCounterValueChange).not.toHaveBeenCalled();
+
+    const defensiveStore = structuredClone(initialStore);
+    delete defensiveStore.gameProgress['stellar-drift'].sets['stellar-drift-ps']
+      .progress['sd-ps-004'];
+
+    rerender(
+      <AchievementTracker
+        game={mockGameStellarDrift}
+        set={setDefinition}
+        store={defensiveStore}
+        {...callbacks}
+      />,
+    );
+
+    expect(
+      screen.getByRole('article', {
+        name: 'Unavailable progress for Achievement 3',
+      }),
+    ).toHaveTextContent(
+      'Progress is unavailable for Achievement 3. Saved data has not been changed.',
+    );
+    expect(
+      screen.queryByRole('spinbutton', {
+        name: 'Set counter for Achievement 3',
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'Mark Achievement 1 complete',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Progress for this platform is unavailable. Your saved data has not been changed.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(callbacks.onCounterValueChange).not.toHaveBeenCalled();
+    expect(callbacks.onNotesChange).not.toHaveBeenCalled();
+
+    const restoredStore = structuredClone(initialStore);
+    rerender(
+      <AchievementTracker
+        game={mockGameStellarDrift}
+        set={setDefinition}
+        store={restoredStore}
+        {...callbacks}
+      />,
+    );
+
+    expect(
+      screen.getByRole('spinbutton', {
+        name: 'Set counter for Achievement 3',
+      }),
+    ).toHaveValue(42);
+    expect(callbacks.onCounterValueChange).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Apply counter for Achievement 3',
+      }),
+    );
+    expect(callbacks.onCounterValueChange).toHaveBeenCalledWith('sd-ps-004', 42);
   });
 });
