@@ -182,18 +182,15 @@ describe('ProgressOverview', () => {
       const focusCards = screen.getAllByRole('article', { name: /Focus item:/ });
       expect(focusCards).toHaveLength(3);
 
-      // Spoiler safe: hidden names not in DOM
       expect(screen.queryByText('Signal Collector')).not.toBeInTheDocument();
       expect(screen.queryByText('First Burn')).not.toBeInTheDocument();
       expect(screen.queryByText('Orbit Breaker')).not.toBeInTheDocument();
       expect(screen.queryByText('Finish Ch 3 shortcut')).not.toBeInTheDocument();
 
-      // Stable generic labels are present in stored Focus Board order.
       expect(within(focusCards[0]).getByText('Achievement 3')).toBeInTheDocument();
       expect(within(focusCards[1]).getByText('Achievement 1')).toBeInTheDocument();
       expect(within(focusCards[2]).getByText('Achievement 2')).toBeInTheDocument();
 
-      // Reveals details on click for individual item
       const user = userEvent.setup();
       await user.click(
         within(focusCards[1]).getByRole('button', {
@@ -270,7 +267,6 @@ describe('ProgressOverview', () => {
 
       const callbacks = renderOverview({ store });
 
-      // target is 48. value is 5. remaining 43, 10%
       expect(
         screen.getByText(/Progress: 5 \/ 48 \(43 remaining, 10%\)/),
       ).toBeInTheDocument();
@@ -325,7 +321,7 @@ describe('ProgressOverview', () => {
       const store = createStore();
       store.gameProgress['stellar-drift'].sets[
         'stellar-drift-ps'
-      ].pinnedAchievementIds = ['sd-ps-006']; // open counter
+      ].pinnedAchievementIds = ['sd-ps-006'];
       store.gameProgress['stellar-drift'].sets[
         'stellar-drift-ps'
       ].progress['sd-ps-006'].counterValue = 3;
@@ -357,7 +353,7 @@ describe('ProgressOverview', () => {
       const store = createStore();
       store.gameProgress['stellar-drift'].sets[
         'stellar-drift-ps'
-      ].pinnedAchievementIds = ['sd-ps-005']; // checklist
+      ].pinnedAchievementIds = ['sd-ps-005'];
       store.gameProgress['stellar-drift'].sets[
         'stellar-drift-ps'
       ].progress['sd-ps-005'].checklistCompletion = {
@@ -372,7 +368,6 @@ describe('ProgressOverview', () => {
         screen.getByText(/Progress: 1 \/ 3 items \(2 remaining, 33%\)/),
       ).toBeInTheDocument();
 
-      // Spoiler safe item label
       const item2Checkbox = screen.getByRole('checkbox', {
         name: 'Item 2 for Achievement 4',
       });
@@ -566,7 +561,6 @@ describe('ProgressOverview', () => {
       const store = createStore();
       const setProgress =
         store.gameProgress['stellar-drift'].sets['stellar-drift-ps'];
-      // Mark all achievements completed
       for (const ach of psSet.achievements) {
         setProgress.progress[ach.id].completed = true;
       }
