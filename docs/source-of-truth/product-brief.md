@@ -126,6 +126,8 @@ The current codebase is a working local foundation using bundled demo data.
 - Hunt Memory runtime features required by the pilot: Run Ledger and Honest Counters (the Schema 3.0 data contract is defined; runtime implementation remains planned).
 - One bundled, validated Dark Souls II: Scholar of the First Sin PlayStation Completion Pack for a confirmed edition and game version.
 - Manual area and bonfire selection, Area Sweep, Hint/Route/Exact guidance, and evidence-backed availability reasons.
+- Run-local guide choices and a findable Save For Later list. Saved items can be removed without a separate Undo control; guide navigation and reveals do not replace progress undo.
+- A deliberate, recoverable move from existing Schema 2.0 saves to Schema 3.0. Existing V2 data remains intact; ambiguous storage states stop saving rather than reset progress.
 - Original schematic area maps with validated markers for achievement-relevant pilot objectives.
 - Responsive game-reactive styling, accessible motion, reduced-motion behavior, and readable time presentation.
 - A real-playthrough validation showing that the owner can plan and finish the supported platinum route.
@@ -156,8 +158,8 @@ The run ledger storage schema, certainty arithmetic rules, and Schema 2.0 to 3.0
 
 1. **Completion Target Partitioning / DLC Grouping:** How base-game achievements and DLC packs are separated, indexed, and evaluated without violating platform-specific reward definitions.
 2. **Tonight Mode Effort:** Which structured effort ranges, buckets, provenance rules, and estimation behavior can support approximate planning without false precision.
-3. **Bundled Completion Pack Contract:** The exact schema for release region, edition, game version, source provenance, last verification, areas, checkpoints, route cards, availability conditions, spoiler levels, and schematic markers.
-4. **Guide State Ownership:** How run-local area, checkpoint, reveal level, and Save For Later state persist without allowing navigation changes to evict the one-step progress undo snapshot.
-5. **Schema 3.0 Cutover Recovery:** Which backup, rollback, and stale-tab behavior protects existing local progress before the same-key migration is activated.
+3. **Bundled Completion Pack Content:** Confirm the exact Dark Souls II release and verify every pilot route, source, and original schematic before the pack is usable. The minimum pack contract is specified in the data contract; game facts are not yet authored.
+4. **Guide State Implementation:** The data contract places run-local route context and Save For Later beside the run ledger, outside progress undo. Schema admission, persistence, and UI remain to be implemented.
+5. **Schema 3.0 Cutover Implementation:** The data contract selects separate V2/V3 keys and one cutover record. Recovery, old-tab divergence warnings, locked saves, export, and browser evidence remain to be implemented and tested before activation.
 6. **Schematic Map Representation:** The smallest accessible data and rendering format that supports original per-area diagrams, stable marker IDs, text equivalents, and measured bundle limits.
 7. **Completion Pack Trust:** Which validation, provenance, integrity, trust, and verification mechanisms safely handle future untrusted local files.
