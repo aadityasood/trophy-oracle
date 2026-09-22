@@ -225,7 +225,7 @@ When updating a game's achievement sets:
 
 ## Planned Hunt Memory Progress Store (Schema 3.0)
 
-This planned schema adds run ledgers and honest counter certainty to local persistence. It is a planned contract and not yet implemented in runtime code.
+This planned schema adds run ledgers and honest counter certainty to local persistence. Domain and storage modules exist, but the live application still loads and saves Schema 2.0. The Schema 3.0 cutover and guide state below are not wired into the application.
 
 ```ts
 type CounterProgress =
@@ -261,10 +261,23 @@ type RunProgress = {
   orphanedProgress: { [achievementId: string]: OrphanedAchievementProgressV3[] };
 };
 
+type GuideStateV3 = {
+  savedAchievementIds: string[];
+  currentRunNumber?: number; // positive integer confirmed by the player, not inferred from run name
+  routeContext?: {
+    packId: string;
+    packVersion: string;
+    areaId?: string;
+    checkpointId?: string;
+    revealByRouteCardId?: { [routeCardId: string]: "route" | "exact" };
+  };
+};
+
 type RunLedgerSetV3 = {
   setId: string;
   activeRunId: string; // references an existing key in runs
   runs: { [runId: string]: RunProgress };
+  guideStateByRunId?: { [runId: string]: GuideStateV3 }; // optional for stores written before guide state exists
 };
 
 type AchievementSetProgressV3 = RunLedgerSetV3 & {
@@ -345,6 +358,8 @@ type CreateRunResult =
   - Map keys in both `sets` and `retiredSets` match embedded `setId` values. The same set ID cannot exist in both maps.
   - Retired sets preserve their active-run selection and complete run ledger but are excluded from active selection, completion, roadmap, and recommendation calculations.
 - **Persisted Map Keys**: Persisted map keys (`gameProgress`, `undoState`, `sets`, `retiredSets`, `runs`, `progress`, `orphanedProgress`, and `checklistCompletion`) may be any nonblank string except the exact reserved string `__proto__`. Schema 3.0 validation rejects a store containing a reserved map key with a typed issue at that map's path instead of silently dropping it. Map keys must match their embedded identifiers, and reference fields (`activeRunId`, `preferredSetId`, `lastGameId`) are resolved with own-property semantics.
+- **Guide State**: `guideStateByRunId` is an optional field of the shared active/retired set ledger. Each own key matches a run in that ledger; `__proto__` is reserved, while `constructor` and `toString` remain valid run IDs. A missing map or missing run entry means no guide choices, not invalid progress. Saved achievement IDs are distinct and must reference the same set when added; IDs later removed from its definition remain saved and removable rather than being silently discarded. The optional current run number is a positive integer confirmed by the player, not inferred from the run's name. A route context with `checkpointId` also has `areaId`, and that checkpoint belongs to that area. Every revealed card belongs to the exact referenced pack version. A missing or mismatched pack, or a removed area, checkpoint, or card ID, makes route context uninterpretable until the player explicitly resets or reconciles it. It never invalidates core progress or removes saved achievement IDs.
+- **Guide/Undo Boundary**: Save For Later is a findable, removable run-local choice, not a progress mutation with one-step undo. Saving, removing, selecting an area or checkpoint, confirming a run number, and revealing a route card never create, clear, or replace `undoState`. `RunProgress` and its undo snapshot contain no guide state. Retiring or restoring a set carries its guide map with the complete ledger, without applying it to active completion calculations. A newly created run need not add an empty guide entry.
 - **Run-Aware One-Step Undo**:
   - Each game retains at most one undo snapshot in `undoState[gameId]`.
   - The snapshot stores `setId`, `runId`, the current set version as `guardedSetVersion`, and the complete previous `RunProgress` of exactly that run. `previous.runId` must equal `runId`.
@@ -354,6 +369,56 @@ type CreateRunResult =
   - A subsequent mutation in any run of the same game replaces that game's previous undo snapshot. Mutations in another game remain independent.
 - **Excluded Run Operations**:
   - Run cloning, merging, carry-over rules, destructive run deletion, structural undo, and cross-run completion aggregation are excluded from this specification and reserved for future design work.
+
+## Planned Bundled Completion Pack (V1 Pilot)
+
+The first pack is authored and bundled with the application for one confirmed game release. It is not a user-import format and does not change saved achievement progress. The pack has its own schema version and content version; neither is the progress-store schema version or the achievement-set version.
+
+```ts
+type BundledCompletionPack = {
+  schemaVersion: "1.0";
+  packId: string;
+  packVersion: string;
+  gameId: string;
+  achievementSetId: string;
+  achievementSetVersion: string;
+  platform: PlatformId;
+  edition: string;
+  region: string;
+  supportedGameVersion: string;
+  verifiedAt: string; // ISO-8601 UTC string
+  sources: { id: string; reference: string; verifiedAt: string; verificationNote: string }[];
+  areas: { id: string; name: string }[];
+  checkpoints: { id: string; areaId: string; name: string }[];
+  objectives: { id: string; achievementIds: string[]; sourceIds: string[] }[];
+  routeCards: {
+    id: string;
+    areaId: string;
+    checkpointId?: string;
+    objectiveIds: string[];
+    sourceIds: string[];
+    hint: string;
+    route: string;
+    exact: string;
+    earliestRunNumber?: number;
+    requiredAchievementIds: string[];
+    markerIds: string[];
+  }[];
+  schematics: {
+    id: string;
+    areaId: string;
+    assetId: string; // bundled original diagram, not a copied commercial map
+    textEquivalent: string;
+    markers: { id: string; routeCardId: string; x: number; y: number; textEquivalent: string }[];
+  }[];
+};
+```
+
+- **Identity and evidence**: `packId` identifies one pack; `packVersion` changes when a route, ID, source judgment, or interpretation changes. The exact game, set ID and version, platform, edition, region, and supported game version must match the selected release. Confirm them before authoring Dark Souls II content. `schemaVersion` controls pack parsing only. Each source reference is inspectable and has a verification note and ISO-8601 UTC date; a source string alone is not proof that a route is correct. No model or imported file may add facts to the bundled pack at runtime.
+- **References**: Nonblank area, checkpoint, objective, route-card, source, schematic, and marker IDs are stable and unique within their respective pack collections; marker IDs are unique across the pack. Every reference resolves inside that pack. Objectives cite distinct, nonempty achievement IDs from its exact set and at least one source. Every route card refers to at least one objective and has its own nonempty source IDs supporting its guidance and availability claim, so it exposes at least one achievement citation backed by route-specific evidence. A marker belongs to its schematic's area and a route card in that area; the card's marker IDs resolve back to those markers. Normalized marker coordinates are within `[0, 1]`, and each schematic and marker has a useful text equivalent. An original schematic asset must be bundled or the schematic and its markers are unavailable; an asset reference is not a remote fetch instruction.
+- **Availability**: A route card can assert only evidenced conditions represented above: a positive earliest run number and distinct required completed achievements in the same run and set. Conflicting or insufficient source evidence, an unconfirmed current run number when one is required, a missing progress record, or any unsupported condition yields `unknown`, never an invented claim of availability. A confirmed later-run requirement takes precedence over unmet current-run requirements; unmet requirements are shown as current-run blockers; only satisfied, evidence-backed conditions are `available`. Run names are not parsed to infer run number. Other game-specific conditions require a later contract addition before they can drive a status.
+- **Spoilers**: `hint`, `route`, and `exact` are nonblank authored text. `hint` must be verified as safe to show without revealing route or exact details. Route and Exact are deliberate per-card reveals; absence from `revealByRouteCardId` means Hint only. Hidden route text, exact interactions, and marker coordinates are not placed in the unrevealed UI or model context. Changing one card's reveal level never reveals another card.
+- **Compatibility**: A missing pack or incompatible pack version disables interpretation of saved route context without clearing it or touching progress. Saved achievement IDs remain findable and removable. The pack does not infer location, read the running game, scrape guides, or mutate player progress.
 
 ## Planned Counter Certainty Rules (Schema 3.0)
 
@@ -538,14 +603,14 @@ type ProgressMigrationResult =
    - Convert and report counters in undo progress with `location: "undo"`. If any required field or record cannot be transformed safely, fail the complete migration rather than clearing or weakening undo.
 8. **Post-Transformation Validation**:
    - Validate the entire transformed object against the Schema 3.0 schema before writing to storage.
-9. **All-or-Nothing Atomic Storage Write**:
-   - The original raw storage bytes remain untouched until the transformed store validates and one replacement write succeeds.
-   - Parse, timestamp, transformation, target validation, or write failure returns a typed failure with fatal conflicts and without mutating saved data. A successful report may contain only nonfatal `warnings`; fatal conflicts cannot accompany `success: true`.
-   - Order migration report arrays lexicographically by game ID, set ID, run ID, and achievement ID. For otherwise identical counter-assumption identities, use location order `active`, `orphan`, then `undo`.
-   - The storage-key rollout is an implementation decision. Whichever supported key strategy is selected must preserve this one-write replacement boundary and the original bytes on failure.
+9. **Separate-Key Cutover**:
+   - The live Schema 2.0 key remains `trophy-oracle.progress.v2`. The planned active Schema 3.0 key is `trophy-oracle.progress.v3`. One immutable `trophy-oracle.progress.v3-cutover` record contains either `{ recordVersion: 1, source: "migrated-v2", rawV2: string }` with the exact original V2 string or `{ recordVersion: 1, source: "fresh" }` for a new store. There is no separate backup or initialized-marker key. The existing unwired same-key V3 adapter does not implement this activation contract.
+   - Loading alone never writes. A V2-backed upgrade requires an explicit player action after explaining the need to close older tabs and offering export. Under an exclusive Web Lock, recheck key presence, validate V2, transform and validate V3, then re-read the exact V2 bytes before writing. A changed source aborts without writing. Write the cutover record before V3; never replace V2. A fresh store writes the `fresh` record immediately before its first saved V3 mutation. A failed record write prevents the V3 write.
+   - The two writes are not an atomic transaction. A record without V3 can mean an interrupted first write or later V3 loss; require explicit recovery and never silently re-migrate or reset. A valid V3 without a valid record is view/export-only until explicit repair. An invalid V3 fails closed. A failed or uncertain write requires read-back where possible and must never expose an unverified candidate as saved. A full site-data clear can remove every key, so local storage alone cannot detect or recover that loss.
+   - A successful migration report may contain only nonfatal `warnings`; fatal conflicts cannot accompany `success: true`. Order report arrays lexicographically by game ID, set ID, run ID, and achievement ID. For otherwise identical counter-assumption identities, use location order `active`, `orphan`, then `undo`. The storage adapter needs distinct typed conflict, access, write, capability, and recovery results; the pure V2-to-V3 transformation does not by itself prove persistence.
 10. **Idempotent Storage State**:
-   - A successful migration writes `schemaVersion: "3.0"`.
-   - Subsequent store loads parse Schema 3.0 directly and do not run migration again.
+   - After a verified cutover, V3 is authoritative and subsequent loads parse it directly. V2 is historical only; never merge later V2 writes automatically into V3. An already-loaded V2 tab does not request the new lock and can still alter V2 without overwriting V3. Compare current V2 to the preserved cutover source on load or focus and warn on divergence. Rolling back to the old app reads V2 only and cannot show post-cutover V3 edits.
+   - New-app cutover and saves use the same exclusive Web Lock named `trophy-oracle.progress.v3-write` and exact raw V3 token checks. This coordinates participating tabs, not older V2 tabs or scripts that ignore the lock. If Web Locks are unavailable, allow view/export but no persistent V3 edit and no V2 write fallback. If storage itself is inaccessible, a clearly labelled session-only mode may allow unsaved work only when it cannot overwrite persisted data. Accept one mutation at a time: mark pending before awaiting the lock, visibly disable further edits, and report a busy result if another action arrives. Derive the action from the last confirmed store and publish it only after verified persistence. No-op actions do not write or change undo. After a completed cutover, a definite write failure with unchanged stored token keeps one candidate for explicit Retry or Discard; a failed first cutover instead enters recovery. A conflict or unreadable state stops saving until reload or recovery. An unsaved action can still be lost in a browser crash.
 
 ## Q&A Evaluation Record
 
