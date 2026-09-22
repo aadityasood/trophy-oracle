@@ -294,6 +294,9 @@ export function reconcileHuntMemoryGameProgress(
           version: retiredSet.version,
           activeRunId: retiredSet.activeRunId,
           runs: retiredSet.runs,
+          ...(retiredSet.guideStateByRunId !== undefined
+            ? { guideStateByRunId: retiredSet.guideStateByRunId }
+            : {}),
         };
         gameProgress.sets[setId] = restoredSet;
         delete gameProgress.retiredSets[setId];
@@ -334,6 +337,9 @@ export function reconcileHuntMemoryGameProgress(
           version: nextSet.version,
           activeRunId: retiredSet.activeRunId,
           runs: restoredRuns,
+          ...(retiredSet.guideStateByRunId !== undefined
+            ? { guideStateByRunId: retiredSet.guideStateByRunId }
+            : {}),
         };
         gameProgress.sets[setId] = restoredSet;
         delete gameProgress.retiredSets[setId];
@@ -374,6 +380,9 @@ export function reconcileHuntMemoryGameProgress(
           retirementReason: 'removed_set',
           activeRunId: activeSet.activeRunId,
           runs: activeSet.runs,
+          ...(activeSet.guideStateByRunId !== undefined
+            ? { guideStateByRunId: activeSet.guideStateByRunId }
+            : {}),
         };
         gameProgress.retiredSets[setId] = retiredEntry;
         delete gameProgress.sets[setId];

@@ -197,9 +197,41 @@ export const RunProgressSchema = z
   .superRefine(refineRunProgress);
 export type RunProgress = z.infer<typeof RunProgressSchema>;
 
+export const GuideRouteCardRevealLevelSchema = z.enum(['route', 'exact']);
+export type GuideRouteCardRevealLevel = z.infer<
+  typeof GuideRouteCardRevealLevelSchema
+>;
+
+export const GuideRouteContextV3Schema = z
+  .strictObject({
+    packId: NonBlankStringSchema,
+    packVersion: NonBlankStringSchema,
+    areaId: NonBlankStringSchema.optional(),
+    checkpointId: NonBlankStringSchema.optional(),
+    revealByRouteCardId: safeRecord(GuideRouteCardRevealLevelSchema).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.checkpointId !== undefined && value.areaId === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'A checkpoint requires an area',
+        path: ['checkpointId'],
+      });
+    }
+  });
+export type GuideRouteContextV3 = z.infer<typeof GuideRouteContextV3Schema>;
+
+export const GuideStateV3Schema = z.strictObject({
+  savedAchievementIds: distinctNonBlankIds,
+  currentRunNumber: z.number().int().positive().optional(),
+  routeContext: GuideRouteContextV3Schema.optional(),
+});
+export type GuideStateV3 = z.infer<typeof GuideStateV3Schema>;
+
 type RunLedgerLike = {
   activeRunId: string;
   runs: Record<string, { runId: string }>;
+  guideStateByRunId?: Record<string, unknown>;
 };
 
 function refineRunLedger(value: RunLedgerLike, ctx: IssueSink): void {
@@ -219,12 +251,24 @@ function refineRunLedger(value: RunLedgerLike, ctx: IssueSink): void {
       path: ['activeRunId'],
     });
   }
+  if (value.guideStateByRunId !== undefined) {
+    Object.keys(value.guideStateByRunId).forEach((runId) => {
+      if (!Object.hasOwn(value.runs, runId)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `Guide state key '${runId}' does not reference a run in this set`,
+          path: ['guideStateByRunId', runId],
+        });
+      }
+    });
+  }
 }
 
 const RunLedgerFields = {
   setId: PersistedRecordKeySchema,
   activeRunId: NonBlankStringSchema,
   runs: safeRecord(RunProgressSchema),
+  guideStateByRunId: safeRecord(GuideStateV3Schema).optional(),
 };
 
 export const RunLedgerSetV3Schema = z
