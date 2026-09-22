@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { LocalProgressStoreV3Schema } from '../domain/hunt-memory-schema';
 import type {
   LocalProgressStoreV3,
@@ -10,175 +11,386 @@ import type { StorageLike } from './progress-storage';
 
 export { createDefaultHuntMemoryStore };
 
-export const HUNT_MEMORY_STORAGE_KEY = DEFAULT_STORAGE_KEY;
+export const DEFAULT_PROGRESS_V2_STORAGE_KEY = DEFAULT_STORAGE_KEY;
+export const DEFAULT_PROGRESS_V3_STORAGE_KEY = 'trophy-oracle.progress.v3';
+export const DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY =
+  'trophy-oracle.progress.v3-cutover';
 
-export type LoadHuntMemoryFailureCode =
+export interface HuntMemoryStorageKeys {
+  readonly v2Key: string;
+  readonly v3Key: string;
+  readonly cutoverKey: string;
+}
+
+export const DEFAULT_HUNT_MEMORY_STORAGE_KEYS: HuntMemoryStorageKeys = {
+  v2Key: DEFAULT_PROGRESS_V2_STORAGE_KEY,
+  v3Key: DEFAULT_PROGRESS_V3_STORAGE_KEY,
+  cutoverKey: DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY,
+};
+
+export const ProgressV3CutoverRecordSchema = z.discriminatedUnion('source', [
+  z.strictObject({
+    recordVersion: z.literal(1),
+    source: z.literal('migrated-v2'),
+    rawV2: z.string(),
+  }),
+  z.strictObject({
+    recordVersion: z.literal(1),
+    source: z.literal('fresh'),
+  }),
+]);
+
+export type ProgressV3CutoverRecord = z.infer<
+  typeof ProgressV3CutoverRecordSchema
+>;
+
+function parseCutoverRecord(raw: string): ProgressV3CutoverRecord | null {
+  try {
+    const result = ProgressV3CutoverRecordSchema.safeParse(JSON.parse(raw));
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export type LegacyV2Status =
+  | 'unchanged'
+  | 'changed'
+  | 'missing'
+  | 'unavailable'
+  | 'not-applicable';
+
+export type HuntMemoryRecoveryReason =
+  | 'CUTOVER_WITHOUT_V3'
+  | 'INVALID_CUTOVER_WITHOUT_V3'
+  | 'V3_WITHOUT_CUTOVER'
+  | 'V3_WITH_INVALID_CUTOVER'
+  | 'INVALID_V3';
+
+export type HuntMemoryInspectionFailureCode =
+  | 'INVALID_STORAGE_KEYS'
   | 'STORAGE_ACCESS_ERROR'
   | 'INVALID_SOURCE_STORE'
   | 'TRANSFORMATION_ERROR'
-  | 'INVALID_TARGET_STORE'
-  | 'STORAGE_WRITE_ERROR';
+  | 'INVALID_TARGET_STORE';
 
-export type LoadHuntMemoryProgressResult =
-  | { success: true; source: 'default'; store: LocalProgressStoreV3 }
-  | { success: true; source: 'loaded-v3'; store: LocalProgressStoreV3 }
+export type HuntMemoryInspectionResult =
   | {
-      success: true;
-      source: 'migrated-v2';
-      store: LocalProgressStoreV3;
-      report: ProgressMigrationReport;
+      readonly status: 'fresh';
+      readonly store: LocalProgressStoreV3;
+      readonly v3Token: null;
     }
   | {
-      success: false;
-      code: LoadHuntMemoryFailureCode;
-      message: string;
-      conflicts: string[];
+      readonly status: 'upgrade-required';
+      readonly v2Token: string;
+      readonly candidateStore: LocalProgressStoreV3;
+      readonly report: ProgressMigrationReport;
+    }
+  | {
+      readonly status: 'loaded-v3';
+      readonly store: LocalProgressStoreV3;
+      readonly v3Token: string;
+      readonly cutoverRecord: ProgressV3CutoverRecord;
+      readonly legacyV2Status: LegacyV2Status;
+      readonly legacyV2Warning?: string;
+      readonly rawV2: string | null;
+    }
+  | {
+      readonly status: 'recovery-required';
+      readonly reason: HuntMemoryRecoveryReason;
+      readonly message: string;
+      readonly conflicts?: readonly string[];
+      readonly rawV2: string | null;
+      readonly rawV3: string | null;
+      readonly rawCutover: string | null;
+      readonly cutoverRecord?: ProgressV3CutoverRecord;
+      readonly validatedStore?: LocalProgressStoreV3;
+    }
+  | {
+      readonly status: 'failure';
+      readonly code: HuntMemoryInspectionFailureCode;
+      readonly message: string;
+      readonly conflicts: readonly string[];
+      readonly rawV2?: string | null;
+      readonly rawV3?: string | null;
+      readonly rawCutover?: string | null;
     };
 
-export type SaveHuntMemoryErrorCode = 'INVALID_SAVE_STATE' | 'STORAGE_WRITE_ERROR';
-
-export type SaveHuntMemoryProgressResult =
-  | { success: true }
-  | { success: false; code: SaveHuntMemoryErrorCode; message: string };
+export interface HuntMemoryInspectionOptions {
+  readonly keys?: Partial<HuntMemoryStorageKeys>;
+  readonly migratedAt?: string;
+}
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function loadFailure(
-  code: LoadHuntMemoryFailureCode,
+function failureResult(
+  code: HuntMemoryInspectionFailureCode,
   message: string,
-  conflicts: string[] = [],
-): LoadHuntMemoryProgressResult {
-  return { success: false, code, message, conflicts };
+  conflicts: readonly string[] = [],
+  rawValues?: {
+    rawV2?: string | null;
+    rawV3?: string | null;
+    rawCutover?: string | null;
+  },
+): HuntMemoryInspectionResult {
+  return {
+    status: 'failure',
+    code,
+    message,
+    conflicts,
+    ...rawValues,
+  };
 }
 
-function formatIssues(error: {
-  issues: readonly { path: readonly PropertyKey[]; message: string }[];
-}): string[] {
-  return error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
+function recoveryResult(
+  reason: HuntMemoryRecoveryReason,
+  message: string,
+  extra?: {
+    conflicts?: readonly string[];
+    rawV2?: string | null;
+    rawV3?: string | null;
+    rawCutover?: string | null;
+    cutoverRecord?: ProgressV3CutoverRecord;
+    validatedStore?: LocalProgressStoreV3;
+  },
+): HuntMemoryInspectionResult {
+  return {
+    status: 'recovery-required',
+    reason,
+    message,
+    rawV2: extra?.rawV2 ?? null,
+    rawV3: extra?.rawV3 ?? null,
+    rawCutover: extra?.rawCutover ?? null,
+    conflicts: extra?.conflicts,
+    cutoverRecord: extra?.cutoverRecord,
+    validatedStore: extra?.validatedStore,
+  };
 }
 
-function readSchemaVersion(parsed: unknown): unknown {
-  if (typeof parsed === 'object' && parsed !== null && 'schemaVersion' in parsed) {
-    return (parsed as { schemaVersion?: unknown }).schemaVersion;
-  }
-  return undefined;
-}
-
-export function loadOrMigrateHuntMemoryProgress(
+// Unlocked snapshot: re-inspect under the exclusive V3 write lock before
+// treating an ambiguous state as durable recovery or performing a write.
+export function inspectHuntMemoryStorage(
   storage: StorageLike,
-  migratedAt: string,
-  key: string = HUNT_MEMORY_STORAGE_KEY,
-): LoadHuntMemoryProgressResult {
-  let rawValue: string | null;
+  options?: HuntMemoryInspectionOptions,
+): HuntMemoryInspectionResult {
+  const keys: HuntMemoryStorageKeys = {
+    ...DEFAULT_HUNT_MEMORY_STORAGE_KEYS,
+    ...options?.keys,
+  };
+
+  if (
+    !keys.v2Key ||
+    keys.v2Key.trim() === '' ||
+    !keys.v3Key ||
+    keys.v3Key.trim() === '' ||
+    !keys.cutoverKey ||
+    keys.cutoverKey.trim() === ''
+  ) {
+    return failureResult(
+      'INVALID_STORAGE_KEYS',
+      'Configured storage keys must be nonblank strings',
+    );
+  }
+
+  if (
+    keys.v2Key === keys.v3Key ||
+    keys.v2Key === keys.cutoverKey ||
+    keys.v3Key === keys.cutoverKey
+  ) {
+    return failureResult(
+      'INVALID_STORAGE_KEYS',
+      'Configured storage keys must be pairwise distinct',
+    );
+  }
+
+  let rawV3: string | null;
   try {
-    rawValue = storage.getItem(key);
+    rawV3 = storage.getItem(keys.v3Key);
   } catch (err) {
-    return loadFailure(
+    return failureResult(
       'STORAGE_ACCESS_ERROR',
-      `Failed to read from storage: ${errorMessage(err)}`,
+      `Failed to read V3 key '${keys.v3Key}': ${errorMessage(err)}`,
     );
   }
 
-  if (rawValue === null) {
-    return {
-      success: true,
-      source: 'default',
-      store: createDefaultHuntMemoryStore(),
-    };
-  }
-
-  let parsed: unknown;
+  let rawCutover: string | null;
   try {
-    parsed = JSON.parse(rawValue);
+    rawCutover = storage.getItem(keys.cutoverKey);
   } catch (err) {
-    return loadFailure(
-      'INVALID_SOURCE_STORE',
-      `Failed to parse stored JSON: ${errorMessage(err)}`,
+    return failureResult(
+      'STORAGE_ACCESS_ERROR',
+      `Failed to read cutover key '${keys.cutoverKey}': ${errorMessage(err)}`,
+      [],
+      { rawV3 },
     );
   }
 
-  const schemaVersion = readSchemaVersion(parsed);
+  const cutoverRecord =
+    rawCutover !== null ? parseCutoverRecord(rawCutover) : null;
 
-  if (schemaVersion === '2.0') {
-    const migrationResult = transformProgressStoreV2ToV3(parsed, migratedAt);
-    if (!migrationResult.success) {
+  if (rawV3 === null && rawCutover === null) {
+    let rawV2: string | null;
+    try {
+      rawV2 = storage.getItem(keys.v2Key);
+    } catch (err) {
+      return failureResult(
+        'STORAGE_ACCESS_ERROR',
+        `Failed to read V2 key '${keys.v2Key}': ${errorMessage(err)}`,
+      );
+    }
+
+    if (rawV2 === null) {
       return {
-        success: false,
-        code: migrationResult.code,
-        message: migrationResult.message,
-        conflicts: migrationResult.conflicts,
+        status: 'fresh',
+        store: createDefaultHuntMemoryStore(),
+        v3Token: null,
       };
     }
 
+    let parsedV2: unknown;
     try {
-      const serialized = JSON.stringify(migrationResult.store);
-      storage.setItem(key, serialized);
+      parsedV2 = JSON.parse(rawV2);
     } catch (err) {
-      return loadFailure(
-        'STORAGE_WRITE_ERROR',
-        `Failed to write migrated store to storage: ${errorMessage(err)}`,
-      );
-    }
-
-    return {
-      success: true,
-      source: 'migrated-v2',
-      store: migrationResult.store,
-      report: migrationResult.report,
-    };
-  }
-
-  if (schemaVersion === '3.0') {
-    const validation = LocalProgressStoreV3Schema.safeParse(parsed);
-    if (!validation.success) {
-      const conflicts = formatIssues(validation.error);
-      return loadFailure(
+      return failureResult(
         'INVALID_SOURCE_STORE',
-        conflicts.join('; ') || validation.error.message,
-        conflicts,
+        `Failed to parse stored V2 JSON: ${errorMessage(err)}`,
+        [],
+        { rawV2 },
+      );
+    }
+
+    const migration = transformProgressStoreV2ToV3(
+      parsedV2,
+      options?.migratedAt ?? '',
+    );
+    if (!migration.success) {
+      return failureResult(
+        migration.code,
+        migration.message,
+        migration.conflicts,
+        { rawV2 },
       );
     }
 
     return {
-      success: true,
-      source: 'loaded-v3',
-      store: validation.data,
+      status: 'upgrade-required',
+      v2Token: rawV2,
+      candidateStore: migration.store,
+      report: migration.report,
     };
   }
 
-  return loadFailure(
-    'INVALID_SOURCE_STORE',
-    'Stored schemaVersion is missing, unsupported, or not a string',
-    [`schemaVersion: ${JSON.stringify(schemaVersion)} is not a supported schema version`],
-  );
-}
-
-export function saveHuntMemoryProgress(
-  store: LocalProgressStoreV3,
-  storage: StorageLike,
-  key: string = HUNT_MEMORY_STORAGE_KEY,
-): SaveHuntMemoryProgressResult {
-  const validation = LocalProgressStoreV3Schema.safeParse(store);
-  if (!validation.success) {
-    const conflicts = formatIssues(validation.error);
-    return {
-      success: false,
-      code: 'INVALID_SAVE_STATE',
-      message: `Refused to save invalid Schema 3.0 store state: ${conflicts.join('; ') || validation.error.message}`,
-    };
+  if (rawV3 === null) {
+    return cutoverRecord !== null
+      ? recoveryResult(
+          'CUTOVER_WITHOUT_V3',
+          'Cutover record present without V3 store',
+          { rawCutover, cutoverRecord },
+        )
+      : recoveryResult(
+          'INVALID_CUTOVER_WITHOUT_V3',
+          'Invalid cutover record present without V3 store',
+          { rawCutover },
+        );
   }
 
+  let parsedV3: unknown;
   try {
-    const serialized = JSON.stringify(validation.data);
-    storage.setItem(key, serialized);
-    return { success: true };
+    parsedV3 = JSON.parse(rawV3);
+  } catch (err) {
+    return recoveryResult(
+      'INVALID_V3',
+      `Failed to parse V3 JSON: ${errorMessage(err)}`,
+      {
+        rawV3,
+        rawCutover,
+        cutoverRecord: cutoverRecord ?? undefined,
+      },
+    );
+  }
+
+  const v3Validation = LocalProgressStoreV3Schema.safeParse(parsedV3);
+  if (!v3Validation.success) {
+    return recoveryResult(
+      'INVALID_V3',
+      'Stored V3 progress does not satisfy Schema 3.0',
+      {
+        conflicts: v3Validation.error.issues.map(
+          (issue) => `${issue.path.join('.')}: ${issue.message}`,
+        ),
+        rawV3,
+        rawCutover,
+        cutoverRecord: cutoverRecord ?? undefined,
+      },
+    );
+  }
+
+  const validV3Store = v3Validation.data;
+
+  if (rawCutover === null) {
+    return recoveryResult(
+      'V3_WITHOUT_CUTOVER',
+      'V3 store present without cutover record',
+      {
+        rawV3,
+        validatedStore: validV3Store,
+      },
+    );
+  }
+
+  if (cutoverRecord === null) {
+    return recoveryResult(
+      'V3_WITH_INVALID_CUTOVER',
+      'V3 store present with invalid cutover record',
+      {
+        rawV3,
+        rawCutover,
+        validatedStore: validV3Store,
+      },
+    );
+  }
+
+  if (cutoverRecord.source === 'fresh') {
+    return {
+      status: 'loaded-v3',
+      store: validV3Store,
+      v3Token: rawV3,
+      cutoverRecord,
+      legacyV2Status: 'not-applicable',
+      rawV2: null,
+    };
+  }
+
+  let rawV2: string | null;
+  try {
+    rawV2 = storage.getItem(keys.v2Key);
   } catch (err) {
     return {
-      success: false,
-      code: 'STORAGE_WRITE_ERROR',
-      message: `Failed to write to storage: ${errorMessage(err)}`,
+      status: 'loaded-v3',
+      store: validV3Store,
+      v3Token: rawV3,
+      cutoverRecord,
+      legacyV2Status: 'unavailable',
+      legacyV2Warning: `Could not check older V2 progress: ${errorMessage(err)}`,
+      rawV2: null,
     };
   }
+
+  const legacyV2Status: LegacyV2Status =
+    rawV2 === null
+      ? 'missing'
+      : rawV2 === cutoverRecord.rawV2
+        ? 'unchanged'
+        : 'changed';
+
+  return {
+    status: 'loaded-v3',
+    store: validV3Store,
+    v3Token: rawV3,
+    cutoverRecord,
+    legacyV2Status,
+    rawV2,
+  };
 }
