@@ -13,22 +13,18 @@ import {
 } from '../domain/hunt-memory-schema';
 import { isIsoUtcString } from '../domain/progress-schema-common';
 
-export const PROGRESS_V3_WRITE_LOCK_NAME = 'trophy-oracle.progress.v3-write';
+import {
+  PROGRESS_V3_WRITE_LOCK_NAME,
+  resolveLockManager,
+  type WebLockCallback,
+  type WebLockManagerLike,
+} from './hunt-memory-write-lock';
 
-export type WebLockCallback<T> = () => Promise<T>;
-
-export interface WebLockManagerLike {
-  request<T>(name: string, callback: WebLockCallback<T>): Promise<T>;
-  request<T>(
-    name: string,
-    options: {
-      readonly mode?: 'exclusive' | 'shared';
-      readonly ifAvailable?: boolean;
-      readonly signal?: AbortSignal;
-    },
-    callback: WebLockCallback<T>,
-  ): Promise<T>;
-}
+export {
+  PROGRESS_V3_WRITE_LOCK_NAME,
+  type WebLockCallback,
+  type WebLockManagerLike,
+};
 
 export interface UpgradeCutoverRequest {
   readonly mode: 'upgrade';
@@ -144,17 +140,6 @@ function validateStorageKeys(keys: HuntMemoryStorageKeys): string | null {
   return null;
 }
 
-function resolveLockManager(
-  options?: HuntMemoryCutoverOptions,
-): WebLockManagerLike | null {
-  if (options && 'lockManager' in options) {
-    return options.lockManager ?? null;
-  }
-  if (typeof navigator !== 'undefined' && typeof navigator.locks?.request === 'function') {
-    return navigator.locks as unknown as WebLockManagerLike;
-  }
-  return null;
-}
 
 function executeInLock(
   storage: StorageLike,
