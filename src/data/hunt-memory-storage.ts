@@ -94,6 +94,7 @@ export type HuntMemoryInspectionResult =
       readonly legacyV2Status: LegacyV2Status;
       readonly legacyV2Warning?: string;
       readonly rawV2: string | null;
+      readonly rawCutover: string;
     }
   | {
       readonly status: 'recovery-required';
@@ -352,17 +353,6 @@ export function inspectHuntMemoryStorage(
     );
   }
 
-  if (cutoverRecord.source === 'fresh') {
-    return {
-      status: 'loaded-v3',
-      store: validV3Store,
-      v3Token: rawV3,
-      cutoverRecord,
-      legacyV2Status: 'not-applicable',
-      rawV2: null,
-    };
-  }
-
   let rawV2: string | null;
   try {
     rawV2 = storage.getItem(keys.v2Key);
@@ -375,6 +365,33 @@ export function inspectHuntMemoryStorage(
       legacyV2Status: 'unavailable',
       legacyV2Warning: `Could not check older V2 progress: ${errorMessage(err)}`,
       rawV2: null,
+      rawCutover,
+    };
+  }
+
+  if (cutoverRecord.source === 'fresh') {
+    if (rawV2 === null) {
+      return {
+        status: 'loaded-v3',
+        store: validV3Store,
+        v3Token: rawV3,
+        cutoverRecord,
+        legacyV2Status: 'not-applicable',
+        rawV2: null,
+        rawCutover,
+      };
+    }
+
+    return {
+      status: 'loaded-v3',
+      store: validV3Store,
+      v3Token: rawV3,
+      cutoverRecord,
+      legacyV2Status: 'changed',
+      legacyV2Warning:
+        'Unexpected legacy V2 progress detected after fresh cutover',
+      rawV2,
+      rawCutover,
     };
   }
 
@@ -385,12 +402,19 @@ export function inspectHuntMemoryStorage(
         ? 'unchanged'
         : 'changed';
 
+  const legacyV2Warning =
+    legacyV2Status === 'changed'
+      ? 'Legacy V2 progress has changed since cutover'
+      : undefined;
+
   return {
     status: 'loaded-v3',
     store: validV3Store,
     v3Token: rawV3,
     cutoverRecord,
     legacyV2Status,
+    legacyV2Warning,
     rawV2,
+    rawCutover,
   };
 }

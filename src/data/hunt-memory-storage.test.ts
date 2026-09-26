@@ -306,15 +306,15 @@ describe('Schema 3.0 hunt memory storage gateway', () => {
     }
   });
 
-  it('proves a valid fresh-record V3 load never reads V2, even when V2 access would throw', () => {
+  it('inspects V2 for a fresh-cutover V3 store: absent remains not-applicable with authoritative V3 and zero writes', () => {
     const storage = new MemoryStorage();
     const v3Store = createValidV3Store();
-    storage.seed(DEFAULT_PROGRESS_V3_STORAGE_KEY, JSON.stringify(v3Store));
+    const rawV3 = JSON.stringify(v3Store);
+    storage.seed(DEFAULT_PROGRESS_V3_STORAGE_KEY, rawV3);
     storage.seed(
       DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY,
       JSON.stringify({ recordVersion: 1, source: 'fresh' }),
     );
-    disallowV2Read(storage, 'Forbidden V2 read during fresh V3 inspection');
 
     const result = inspectHuntMemoryStorage(storage, {
       migratedAt: MIGRATION_TS,
@@ -323,7 +323,62 @@ describe('Schema 3.0 hunt memory storage gateway', () => {
     if (result.status !== 'loaded-v3') return;
 
     expect(result.store).toEqual(v3Store);
+    expect(result.v3Token).toBe(rawV3);
     expect(result.legacyV2Status).toBe('not-applicable');
+    expect(result.legacyV2Warning).toBeUndefined();
+    expect(result.cutoverRecord.source).toBe('fresh');
+    expect(result.rawV2).toBeNull();
+    expect(storage.writeCount).toBe(0);
+  });
+
+  it('inspects V2 for a fresh-cutover V3 store: late V2 bytes report unexpected drift warning without displacing V3 or writing', () => {
+    const storage = new MemoryStorage();
+    const v3Store = createValidV3Store();
+    const rawV3 = JSON.stringify(v3Store);
+    const lateV2 = '{"schemaVersion":"2.0","unexpectedDrift":true}';
+    storage.seed(DEFAULT_PROGRESS_V3_STORAGE_KEY, rawV3);
+    storage.seed(
+      DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY,
+      JSON.stringify({ recordVersion: 1, source: 'fresh' }),
+    );
+    storage.seed(DEFAULT_PROGRESS_V2_STORAGE_KEY, lateV2);
+
+    const result = inspectHuntMemoryStorage(storage, {
+      migratedAt: MIGRATION_TS,
+    });
+    expect(result.status).toBe('loaded-v3');
+    if (result.status !== 'loaded-v3') return;
+
+    expect(result.store).toEqual(v3Store);
+    expect(result.v3Token).toBe(rawV3);
+    expect(result.legacyV2Status).toBe('changed');
+    expect(result.legacyV2Warning).toContain('Unexpected legacy V2 progress');
+    expect(result.cutoverRecord.source).toBe('fresh');
+    expect(result.rawV2).toBe(lateV2);
+    expect(storage.writeCount).toBe(0);
+  });
+
+  it('inspects V2 for a fresh-cutover V3 store: V2 read failure yields unavailable warning and retains valid V3 without writes', () => {
+    const storage = new MemoryStorage();
+    const v3Store = createValidV3Store();
+    const rawV3 = JSON.stringify(v3Store);
+    storage.seed(DEFAULT_PROGRESS_V3_STORAGE_KEY, rawV3);
+    storage.seed(
+      DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY,
+      JSON.stringify({ recordVersion: 1, source: 'fresh' }),
+    );
+    disallowV2Read(storage, 'Disk error on V2 during fresh V3 inspection');
+
+    const result = inspectHuntMemoryStorage(storage, {
+      migratedAt: MIGRATION_TS,
+    });
+    expect(result.status).toBe('loaded-v3');
+    if (result.status !== 'loaded-v3') return;
+
+    expect(result.store).toEqual(v3Store);
+    expect(result.v3Token).toBe(rawV3);
+    expect(result.legacyV2Status).toBe('unavailable');
+    expect(result.legacyV2Warning).toContain('Disk error on V2');
     expect(result.cutoverRecord.source).toBe('fresh');
     expect(result.rawV2).toBeNull();
     expect(storage.writeCount).toBe(0);
