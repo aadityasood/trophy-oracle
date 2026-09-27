@@ -4,6 +4,7 @@ import {
   ProgressV3CutoverRecordSchema,
   inspectHuntMemoryStorage,
   type HuntMemoryStorageKeys,
+  type LegacyV2Status,
   type ProgressV3CutoverRecord,
 } from './hunt-memory-storage';
 import {
@@ -26,7 +27,10 @@ export type HuntMemorySaveSuccessResult = {
   readonly store: LocalProgressStoreV3;
   readonly v3Token: string;
   readonly cutoverRecord: ProgressV3CutoverRecord;
+  readonly legacyV2Status: LegacyV2Status;
   readonly legacyV2Warning?: string;
+  readonly rawV2: string | null;
+  readonly rawCutover: string;
 };
 
 export type HuntMemorySaveBlockedReason =
@@ -177,7 +181,10 @@ function executeInLock(
       store: candidateStore,
       v3Token: inspection.v3Token,
       cutoverRecord: inspection.cutoverRecord,
+      legacyV2Status: inspection.legacyV2Status,
       legacyV2Warning: inspection.legacyV2Warning,
+      rawV2: inspection.rawV2,
+      rawCutover: inspection.rawCutover,
     };
   }
 
@@ -233,7 +240,10 @@ function executeInLock(
       store: candidateStore,
       v3Token: candidateBytes,
       cutoverRecord: inspection.cutoverRecord,
+      legacyV2Status: inspection.legacyV2Status,
       legacyV2Warning: inspection.legacyV2Warning,
+      rawV2: inspection.rawV2,
+      rawCutover: inspection.rawCutover,
     };
   }
 

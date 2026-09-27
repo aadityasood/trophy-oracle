@@ -135,6 +135,10 @@ describe('Schema 3.0 ordinary locked V3 save', () => {
     expect(result.store).toEqual(candidate);
     expect(result.v3Token).toBe(JSON.stringify(candidate));
     expect(result.cutoverRecord).toEqual({ recordVersion: 1, source: 'fresh' });
+    expect(result.legacyV2Status).toBe('not-applicable');
+    expect(result.legacyV2Warning).toBeUndefined();
+    expect(result.rawV2).toBeNull();
+    expect(result.rawCutover).toBe(storage.getRawValue(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY));
     expect(lockManager.requestModes).toEqual(['exclusive']);
     expect(lockManager.events).toEqual([
       'request:trophy-oracle.progress.v3-write',
@@ -171,6 +175,10 @@ describe('Schema 3.0 ordinary locked V3 save', () => {
 
     expect(result.store).toEqual(candidate);
     expect(storage.getRawValue(DEFAULT_PROGRESS_V2_STORAGE_KEY)).toBe(rawV2);
+    expect(result.legacyV2Status).toBe('unchanged');
+    expect(result.legacyV2Warning).toBeUndefined();
+    expect(result.rawV2).toBe(rawV2);
+    expect(result.rawCutover).toBe(storage.getRawValue(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY));
     expect(storage.getRawValue(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY)).toBe(
       JSON.stringify({ recordVersion: 1, source: 'migrated-v2', rawV2 }),
     );
@@ -378,8 +386,30 @@ describe('Schema 3.0 ordinary locked V3 save', () => {
     expect(storage.removeItemCalls).toHaveLength(0);
   });
 
-  it('performs no writes for byte-identical candidates and returns success', async () => {
+  it.each([
+    ['fresh', 'not-applicable'],
+    ['fresh', 'changed'],
+    ['fresh', 'unavailable'],
+    ['migrated-v2', 'unchanged'],
+    ['migrated-v2', 'changed'],
+    ['migrated-v2', 'missing'],
+    ['migrated-v2', 'unavailable'],
+  ] as const)('returns exact %s / %s metadata without writing byte-identical candidates', async (source, legacyStatus) => {
     const { storage, lockManager, baseStore, token } = setupFreshFixture();
+    const originalV2 = '{"schemaVersion":"2.0","gameProgress":{}}';
+    const rawCutover = JSON.stringify(source === 'fresh' ? { recordVersion: 1, source }
+      : { recordVersion: 1, source, rawV2: originalV2 }, null, 2);
+    storage.seed(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY, rawCutover);
+    const rawV2 = legacyStatus === 'changed' ? ` ${originalV2}`
+      : legacyStatus === 'unchanged' ? originalV2 : null;
+    if (rawV2 !== null) storage.seed(DEFAULT_PROGRESS_V2_STORAGE_KEY, rawV2);
+    if (legacyStatus === 'unavailable') {
+      const getItem = storage.getItem.bind(storage);
+      storage.getItem = (key) => {
+        if (key === DEFAULT_PROGRESS_V2_STORAGE_KEY) throw new Error('Legacy read fault');
+        return getItem(key);
+      };
+    }
 
     const result = await saveHuntMemoryProgress(storage, token, baseStore, { lockManager });
 
@@ -388,7 +418,15 @@ describe('Schema 3.0 ordinary locked V3 save', () => {
 
     expect(result.v3Token).toBe(token);
     expect(result.store).toEqual(baseStore);
+    expect(result.legacyV2Status).toBe(legacyStatus);
+    expect(result.rawV2).toBe(rawV2);
+    expect(result.rawCutover).toBe(rawCutover);
+    expect(result.legacyV2Warning).toBe(legacyStatus === 'changed'
+      ? source === 'fresh' ? 'Unexpected legacy V2 progress detected after fresh cutover' : 'Legacy V2 progress has changed since cutover'
+      : legacyStatus === 'unavailable' ? 'Could not check older V2 progress: Legacy read fault' : undefined);
     expect(storage.getRawValue(DEFAULT_PROGRESS_V3_STORAGE_KEY)).toBe(token);
+    expect(storage.getRawValue(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY)).toBe(rawCutover);
+    expect(storage.getRawValue(DEFAULT_PROGRESS_V2_STORAGE_KEY)).toBe(rawV2);
     expect(storage.setItemCalls).toHaveLength(0);
     expect(storage.removeItemCalls).toHaveLength(0);
   });
@@ -635,6 +673,9 @@ describe('Schema 3.0 ordinary locked V3 save', () => {
     if (result.status !== 'success') return;
 
     expect(result.legacyV2Warning).toContain('Unexpected legacy V2 progress');
+    expect(result.legacyV2Status).toBe('changed');
+    expect(result.rawV2).toBe(lateV2);
+    expect(result.rawCutover).toBe(storage.getRawValue(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY));
     expect(result.store).toEqual(candidate);
 
     expect(storage.getRawValue(DEFAULT_PROGRESS_V2_STORAGE_KEY)).toBe(lateV2);
@@ -659,6 +700,9 @@ describe('Schema 3.0 ordinary locked V3 save', () => {
     if (result.status !== 'success') return;
 
     expect(result.legacyV2Warning).toContain('Could not check older V2 progress');
+    expect(result.legacyV2Status).toBe('unavailable');
+    expect(result.rawV2).toBeNull();
+    expect(result.rawCutover).toBe(storage.getRawValue(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY));
     expect(result.store).toEqual(candidate);
     expect(storage.setItemCalls.some((c) => c.key === DEFAULT_PROGRESS_V2_STORAGE_KEY)).toBe(false);
   });
