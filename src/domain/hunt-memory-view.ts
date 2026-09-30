@@ -17,6 +17,7 @@ import { validateTrackerShape } from './hunt-memory-tracker-shape';
 import {
   CANONICAL_STAGE_ORDER,
   STAGE_DISPLAY_LABELS,
+  hasUrgency,
   type StageId,
   type StageSummary,
 } from './progress-view';
@@ -357,4 +358,141 @@ export function getProgressSummaryV3(
 ): string | undefined {
   const presentation = getTrackerPresentationV3(achievement, progress);
   return presentation.status === 'ready' ? presentation.summary : undefined;
+}
+
+export function hasRunPartialProgress(
+  achievement: AchievementRecord,
+  progress?: AchievementProgressV3,
+): boolean {
+  const presentation = getTrackerPresentationV3(achievement, progress);
+  if (presentation.status !== 'ready' || presentation.completed) {
+    return false;
+  }
+
+  if (presentation.mode === 'counter') {
+    switch (presentation.metrics.certainty) {
+      case 'exact':
+        return presentation.metrics.value > 0;
+      case 'at_least':
+        return presentation.metrics.minimum > 0;
+      case 'estimated':
+        return presentation.metrics.estimate > 0;
+      case 'unknown':
+        return presentation.metrics.observedSinceStart > 0;
+    }
+  }
+
+  if (presentation.mode === 'checklist') {
+    return presentation.completedCount > 0;
+  }
+
+  return false;
+}
+
+function areRunPrerequisitesMet(
+  achievement: AchievementRecord,
+  definitionMap: Map<string, AchievementRecord>,
+  run: RunProgress,
+): boolean {
+  if (!achievement.prerequisites || achievement.prerequisites.length === 0) {
+    return true;
+  }
+
+  for (const prereqId of achievement.prerequisites) {
+    const prereqDef = definitionMap.get(prereqId);
+    if (!prereqDef) {
+      return false;
+    }
+
+    if (!Object.hasOwn(run.progress, prereqId)) {
+      return false;
+    }
+
+    const prereqProgress = run.progress[prereqId];
+    const prereqPresentation = getTrackerPresentationV3(
+      prereqDef,
+      prereqProgress,
+    );
+    if (
+      prereqPresentation.status !== 'ready' ||
+      prereqPresentation.completed !== true
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function getRunOracleFocus(
+  set: AchievementSet,
+  run: RunProgress,
+): AchievementRecord[] {
+  const activeStage = resolveRunActiveStage(run);
+  const definitionMap = new Map(
+    set.achievements.map((achievement) => [achievement.id, achievement]),
+  );
+
+  const eligible: Array<{
+    achievement: AchievementRecord;
+    sourceIndex: number;
+    progress: AchievementProgressV3;
+  }> = [];
+
+  for (let i = 0; i < set.achievements.length; i++) {
+    const achievement = set.achievements[i];
+    if (!Object.hasOwn(run.progress, achievement.id)) {
+      continue;
+    }
+
+    const progress = run.progress[achievement.id];
+    const presentation = getTrackerPresentationV3(achievement, progress);
+    if (presentation.status !== 'ready' || presentation.completed === true) {
+      continue;
+    }
+
+    if (!areRunPrerequisitesMet(achievement, definitionMap, run)) {
+      continue;
+    }
+
+    eligible.push({ achievement, sourceIndex: i, progress });
+  }
+
+  if (eligible.length === 0) {
+    return [];
+  }
+
+  const sorted = [...eligible].sort((a, b) => {
+    const aUrgent = hasUrgency(a.achievement);
+    const bUrgent = hasUrgency(b.achievement);
+    if (aUrgent !== bUrgent) {
+      return aUrgent ? -1 : 1;
+    }
+
+    const aStageMatch = a.achievement.expectedStage === activeStage;
+    const bStageMatch = b.achievement.expectedStage === activeStage;
+    if (aStageMatch !== bStageMatch) {
+      return aStageMatch ? -1 : 1;
+    }
+
+    const aPartial = hasRunPartialProgress(a.achievement, a.progress);
+    const bPartial = hasRunPartialProgress(b.achievement, b.progress);
+    if (aPartial !== bPartial) {
+      return aPartial ? -1 : 1;
+    }
+
+    const aStageOrder = CANONICAL_STAGE_ORDER.indexOf(
+      a.achievement.expectedStage,
+    );
+    const bStageOrder = CANONICAL_STAGE_ORDER.indexOf(
+      b.achievement.expectedStage,
+    );
+    if (aStageOrder !== bStageOrder) {
+      return aStageOrder - bStageOrder;
+    }
+
+    return a.sourceIndex - b.sourceIndex;
+  });
+
+  return sorted.slice(0, 3).map((item) => item.achievement);
 }
