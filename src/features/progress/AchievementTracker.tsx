@@ -11,13 +11,13 @@ export interface AchievementTrackerProps {
   set: AchievementSet;
   store: LocalProgressStore;
   onBinaryCompletionChange: (achievementId: string, completed: boolean) => void;
-  onCounterValueChange: (achievementId: string, value: number) => void;
+  onCounterValueChange: (achievementId: string, value: number) => boolean;
   onChecklistItemCompletionChange: (
     achievementId: string,
     itemId: string,
     completed: boolean,
   ) => void;
-  onNotesChange: (achievementId: string, notes: string | undefined) => void;
+  onNotesChange: (achievementId: string, notes: string | undefined) => boolean;
   onCompletionOverrideChange: (
     achievementId: string,
     override: boolean,

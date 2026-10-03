@@ -206,15 +206,16 @@ export function useProgressStore(options: UseProgressStoreOptions = {}) {
   );
 
   const commitMutation = useCallback(
-    (result: MutationResult): void => {
+    (result: MutationResult): boolean => {
       if (!result.success) {
         setActionStatus(result.error);
-        return;
+        return false;
       }
       if (result.changed) {
-        commitStore(result.store);
+        return commitStore(result.store);
       } else {
         setActionStatus(null);
+        return true;
       }
     },
     [commitStore],
@@ -283,8 +284,13 @@ export function useProgressStore(options: UseProgressStoreOptions = {}) {
   );
 
   const updateCounterValue = useCallback(
-    (game: GameRecord, setId: string, achievementId: string, value: number) => {
-      commitMutation(
+    (
+      game: GameRecord,
+      setId: string,
+      achievementId: string,
+      value: number,
+    ): boolean => {
+      return commitMutation(
         setCounterValue(
           latestStoreRef.current,
           game,
@@ -327,8 +333,8 @@ export function useProgressStore(options: UseProgressStoreOptions = {}) {
       setId: string,
       achievementId: string,
       notes: string | undefined,
-    ) => {
-      commitMutation(
+    ): boolean => {
+      return commitMutation(
         setNotes(
           latestStoreRef.current,
           game,

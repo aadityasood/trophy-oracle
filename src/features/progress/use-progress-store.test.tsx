@@ -702,4 +702,210 @@ describe('useProgressStore', () => {
 
     window.localStorage.clear();
   });
+
+  it('returns true on counter and notes acceptance across successful write, no-op, session-only, fallback, and physical write failure', () => {
+    const storage = new MemoryStorage();
+    const { result } = renderHook(() => useProgressStore({ storage, now: fixedNow }));
+    act(() => result.current.selectGameAction(mockGameStellarDrift));
+    const writesAfterSelect = storage.writeCount;
+
+    act(() => {
+      expect(result.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', 10)).toBe(true);
+      expect(result.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', 'accepted note')).toBe(true);
+    });
+    expect(storage.writeCount).toBe(writesAfterSelect + 2);
+    expect(result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-004'].counterValue).toBe(10);
+    expect(result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-001'].notes).toBe('accepted note');
+    expect(result.current.store.undoState?.['stellar-drift']).toBeDefined();
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toContain('"counterValue":10');
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toContain('accepted note');
+    expect(result.current.canSave).toBe(true);
+    expect(result.current.persistenceStatus).toBeNull();
+
+    const writesBeforeNoOp = storage.writeCount;
+    const storeBeforeNoOp = result.current.store;
+    const undoBeforeNoOp = structuredClone(result.current.store.undoState?.['stellar-drift']);
+    const rawBeforeNoOp = storage.getRawValue(DEFAULT_STORAGE_KEY);
+    act(() => {
+      expect(result.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', 10)).toBe(true);
+      expect(result.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', 'accepted note')).toBe(true);
+    });
+    expect(storage.writeCount).toBe(writesBeforeNoOp);
+    expect(result.current.store).toBe(storeBeforeNoOp);
+    expect(result.current.store.undoState?.['stellar-drift']).toEqual(undoBeforeNoOp);
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(rawBeforeNoOp);
+    expect(result.current.canSave).toBe(true);
+    expect(result.current.persistenceStatus).toBeNull();
+
+    const { result: sessionResult } = renderHook(() => useProgressStore({ storage: null, now: fixedNow }));
+    act(() => sessionResult.current.selectGameAction(mockGameStellarDrift));
+    act(() => {
+      expect(sessionResult.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', 5)).toBe(true);
+      expect(sessionResult.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', 'session note')).toBe(true);
+    });
+    expect(sessionResult.current.canSave).toBe(false);
+    expect(sessionResult.current.persistenceStatus).toContain('Session-only mode');
+    expect(sessionResult.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-004'].counterValue).toBe(5);
+    expect(sessionResult.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-001'].notes).toBe('session note');
+    expect(sessionResult.current.store.undoState?.['stellar-drift']).toBeDefined();
+
+    const malformedStorage = new MemoryStorage();
+    const rawMalformed = '{ malformed';
+    malformedStorage.seed(DEFAULT_STORAGE_KEY, rawMalformed);
+    const { result: malformedResult } = renderHook(() => useProgressStore({ storage: malformedStorage, now: fixedNow }));
+    act(() => malformedResult.current.selectGameAction(mockGameStellarDrift));
+    act(() => {
+      expect(malformedResult.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', 12)).toBe(true);
+      expect(malformedResult.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', 'fallback note')).toBe(true);
+    });
+    expect(malformedStorage.writeCount).toBe(0);
+    expect(malformedStorage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(rawMalformed);
+    expect(malformedResult.current.canSave).toBe(false);
+    expect(malformedResult.current.persistenceStatus).toContain('will not overwrite it');
+    expect(malformedResult.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-004'].counterValue).toBe(12);
+    expect(malformedResult.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-001'].notes).toBe('fallback note');
+    expect(malformedResult.current.store.undoState?.['stellar-drift']).toBeDefined();
+
+    const unreadableStorage = new MemoryStorage();
+    const rawUnreadable = JSON.stringify({ schemaVersion: '2.0', lastGameId: 'stellar-drift' });
+    unreadableStorage.seed(DEFAULT_STORAGE_KEY, rawUnreadable);
+    unreadableStorage.setReadError(new Error('initial load failure'));
+    const { result: unreadableResult } = renderHook(() => useProgressStore({ storage: unreadableStorage, now: fixedNow }));
+    act(() => unreadableResult.current.selectGameAction(mockGameStellarDrift));
+    act(() => {
+      expect(unreadableResult.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', 14)).toBe(true);
+      expect(unreadableResult.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', 'unreadable note')).toBe(true);
+    });
+    expect(unreadableStorage.writeCount).toBe(0);
+    expect(unreadableStorage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(rawUnreadable);
+    expect(unreadableResult.current.canSave).toBe(false);
+    expect(unreadableResult.current.persistenceStatus).toContain('could not be loaded');
+    expect(unreadableResult.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-004'].counterValue).toBe(14);
+    expect(unreadableResult.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-001'].notes).toBe('unreadable note');
+    expect(unreadableResult.current.store.undoState?.['stellar-drift']).toBeDefined();
+
+    const throwingStorage = new MemoryStorage();
+    throwingStorage.setWriteError(new Error('quota exceeded'));
+    const { result: throwingResult } = renderHook(() => useProgressStore({ storage: throwingStorage, now: fixedNow }));
+    act(() => throwingResult.current.selectGameAction(mockGameStellarDrift));
+    const writesBeforeThrow = throwingStorage.writeCount;
+    act(() => {
+      expect(throwingResult.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', 15)).toBe(true);
+      expect(throwingResult.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', 'failed write note')).toBe(true);
+    });
+    expect(throwingStorage.writeCount).toBe(writesBeforeThrow + 2);
+    expect(throwingStorage.getRawValue(DEFAULT_STORAGE_KEY)).toBeNull();
+    expect(throwingResult.current.canSave).toBe(true);
+    expect(throwingResult.current.persistenceStatus).toContain('Progress not saved');
+    expect(throwingResult.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-004'].counterValue).toBe(15);
+    expect(throwingResult.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-001'].notes).toBe('failed write note');
+    expect(throwingResult.current.store.undoState?.['stellar-drift']).toBeDefined();
+  });
+
+  it('returns false for domain errors, stale conflicts, and save-time read failures with unchanged store and undo', () => {
+    const storage = new MemoryStorage();
+    const { result } = renderHook(() => useProgressStore({ storage, now: fixedNow }));
+    act(() => {
+      result.current.selectGameAction(mockGameStellarDrift);
+      result.current.updateBinaryCompletion(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', true);
+    });
+    expect(result.current.store.undoState?.['stellar-drift']).toBeDefined();
+    const storeBefore = result.current.store;
+    const undoBefore = structuredClone(result.current.store.undoState?.['stellar-drift']);
+    const rawBefore = storage.getRawValue(DEFAULT_STORAGE_KEY);
+    const writesBefore = storage.writeCount;
+
+    act(() => {
+      expect(result.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', -5)).toBe(false);
+    });
+    expect(result.current.actionStatus).toContain('non-negative integer');
+    expect(result.current.canSave).toBe(true);
+    expect(result.current.persistenceStatus).toBeNull();
+    expect(result.current.store).toBe(storeBefore);
+    expect(result.current.store.undoState?.['stellar-drift']).toEqual(undoBefore);
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(rawBefore);
+    expect(storage.writeCount).toBe(writesBefore);
+
+    const foreignBytes = JSON.stringify({ foreign: 'data' });
+    storage.seed(DEFAULT_STORAGE_KEY, foreignBytes);
+    act(() => {
+      expect(result.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', 20)).toBe(false);
+    });
+    expect(result.current.canSave).toBe(false);
+    expect(result.current.persistenceStatus).toBe('Saved progress changed in another session. Reload required to resume saving.');
+    expect(result.current.store).toBe(storeBefore);
+    expect(result.current.store.undoState?.['stellar-drift']).toEqual(undoBefore);
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(foreignBytes);
+    expect(storage.writeCount).toBe(writesBefore);
+
+    const storage2 = new MemoryStorage();
+    const { result: hook2 } = renderHook(() => useProgressStore({ storage: storage2, now: fixedNow }));
+    act(() => {
+      hook2.current.selectGameAction(mockGameStellarDrift);
+      hook2.current.updateBinaryCompletion(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', true);
+    });
+    expect(hook2.current.store.undoState?.['stellar-drift']).toBeDefined();
+    const hook2StoreBefore = hook2.current.store;
+    const hook2UndoBefore = structuredClone(hook2.current.store.undoState?.['stellar-drift']);
+    const hook2RawBefore = storage2.getRawValue(DEFAULT_STORAGE_KEY);
+    const hook2WritesBefore = storage2.writeCount;
+
+    storage2.setReadError(new Error('save-time read failure'));
+    act(() => {
+      expect(hook2.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', 'should fail')).toBe(false);
+    });
+    expect(hook2.current.canSave).toBe(false);
+    expect(hook2.current.persistenceStatus).toBe('Saved progress could not be checked. Reload required to resume saving.');
+    expect(hook2.current.store).toBe(hook2StoreBefore);
+    expect(hook2.current.store.undoState?.['stellar-drift']).toEqual(hook2UndoBefore);
+    expect(storage2.getRawValue(DEFAULT_STORAGE_KEY)).toBe(hook2RawBefore);
+    expect(storage2.writeCount).toBe(hook2WritesBefore);
+  });
+
+  it('preserves reload latch on no-op, returns true without clearing status, and rejects subsequent changed actions', () => {
+    const storage = new MemoryStorage();
+    const { result } = renderHook(() => useProgressStore({ storage, now: fixedNow }));
+    act(() => {
+      result.current.selectGameAction(mockGameStellarDrift);
+      result.current.updateBinaryCompletion(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', true);
+    });
+    expect(result.current.store.undoState?.['stellar-drift']).toBeDefined();
+    const confirmedCounter = result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-004']?.counterValue ?? 0;
+    const confirmedNotes = result.current.store.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-001']?.notes;
+
+    const foreignBytes = JSON.stringify({ foreign: 'conflict' });
+    storage.seed(DEFAULT_STORAGE_KEY, foreignBytes);
+    act(() => {
+      expect(result.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', confirmedCounter + 1)).toBe(false);
+    });
+    expect(result.current.canSave).toBe(false);
+    const reloadWarning = result.current.persistenceStatus;
+    expect(reloadWarning).toContain('Reload required');
+
+    const storeBeforeNoOp = result.current.store;
+    const undoBeforeNoOp = structuredClone(result.current.store.undoState?.['stellar-drift']);
+    const writesBeforeNoOp = storage.writeCount;
+
+    act(() => {
+      expect(result.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', confirmedCounter)).toBe(true);
+      expect(result.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', confirmedNotes)).toBe(true);
+    });
+    expect(result.current.canSave).toBe(false);
+    expect(result.current.persistenceStatus).toBe(reloadWarning);
+    expect(result.current.store).toBe(storeBeforeNoOp);
+    expect(result.current.store.undoState?.['stellar-drift']).toEqual(undoBeforeNoOp);
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(foreignBytes);
+    expect(storage.writeCount).toBe(writesBeforeNoOp);
+
+    act(() => {
+      expect(result.current.updateCounterValue(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-004', 99)).toBe(false);
+      expect(result.current.updateNotes(mockGameStellarDrift, 'stellar-drift-ps', 'sd-ps-001', 'rejected')).toBe(false);
+    });
+    expect(result.current.canSave).toBe(false);
+    expect(result.current.persistenceStatus).toBe(reloadWarning);
+    expect(result.current.store).toBe(storeBeforeNoOp);
+    expect(result.current.store.undoState?.['stellar-drift']).toEqual(undoBeforeNoOp);
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(foreignBytes);
+    expect(storage.writeCount).toBe(writesBeforeNoOp);
+  });
 });
