@@ -29,9 +29,9 @@ function renderTracker(
 ) {
   const callbacks = {
     onBinaryCompletionChange: vi.fn(),
-    onCounterValueChange: vi.fn(),
+    onCounterValueChange: vi.fn().mockReturnValue(true),
     onChecklistItemCompletionChange: vi.fn(),
-    onNotesChange: vi.fn(),
+    onNotesChange: vi.fn().mockReturnValue(true),
     onCompletionOverrideChange: vi.fn(),
     onTogglePin: vi.fn(),
     onUndo: vi.fn(),
@@ -263,7 +263,7 @@ describe('AchievementTracker', () => {
         previous: structuredClone(setProgress),
       },
     };
-    const onNotesChange = vi.fn();
+    const onNotesChange = vi.fn().mockReturnValue(true);
     const onUndo = vi.fn();
     renderTracker({ store, onNotesChange, onUndo });
 
@@ -401,9 +401,9 @@ describe('AchievementTracker', () => {
     const initialStore = createStore();
     const callbacks = {
       onBinaryCompletionChange: vi.fn(),
-      onCounterValueChange: vi.fn(),
+      onCounterValueChange: vi.fn().mockReturnValue(true),
       onChecklistItemCompletionChange: vi.fn(),
-      onNotesChange: vi.fn(),
+      onNotesChange: vi.fn().mockReturnValue(true),
       onCompletionOverrideChange: vi.fn(),
       onTogglePin: vi.fn(),
       onUndo: vi.fn(),
@@ -480,9 +480,9 @@ describe('AchievementTracker', () => {
     const initialStore = createStore();
     const callbacks = {
       onBinaryCompletionChange: vi.fn(),
-      onCounterValueChange: vi.fn(),
+      onCounterValueChange: vi.fn().mockReturnValue(true),
       onChecklistItemCompletionChange: vi.fn(),
-      onNotesChange: vi.fn(),
+      onNotesChange: vi.fn().mockReturnValue(true),
       onCompletionOverrideChange: vi.fn(),
       onTogglePin: vi.fn(),
       onUndo: vi.fn(),
@@ -565,5 +565,84 @@ describe('AchievementTracker', () => {
       }),
     );
     expect(callbacks.onCounterValueChange).toHaveBeenCalledWith('sd-ps-004', 42);
+  });
+
+  it('retains distinct drafts and feedback on rejected actions, survives same-context rerender, and clears only associated draft on acceptance', async () => {
+    const user = userEvent.setup();
+    const initialStore = createStore();
+    initialStore.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-004'].counterValue = 10;
+    initialStore.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-001'].notes = 'initial note';
+
+    const onCounterValueChange = vi.fn().mockReturnValue(false);
+    const onNotesChange = vi.fn().mockReturnValue(false);
+    const callbacks = {
+      onBinaryCompletionChange: vi.fn(),
+      onCounterValueChange,
+      onChecklistItemCompletionChange: vi.fn(),
+      onNotesChange,
+      onCompletionOverrideChange: vi.fn(),
+      onTogglePin: vi.fn(),
+      onUndo: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <AchievementTracker game={mockGameStellarDrift} set={setDefinition} store={initialStore} {...callbacks} />,
+    );
+
+    const counterInput = screen.getByRole('spinbutton', { name: 'Set counter for Achievement 3' });
+    await user.clear(counterInput);
+    await user.type(counterInput, '42');
+    await user.click(screen.getByRole('button', { name: 'Apply counter for Achievement 3' }));
+    expect(onCounterValueChange).toHaveBeenCalledWith('sd-ps-004', 42);
+    expect(counterInput).toHaveValue(42);
+    expect(screen.getByText('Counter update could not be applied.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Decrease counter for Achievement 3' }));
+    expect(onCounterValueChange).toHaveBeenCalledWith('sd-ps-004', 9);
+    expect(counterInput).toHaveValue(42);
+
+    await user.click(screen.getByRole('button', { name: 'Add 5 to counter for Achievement 3' }));
+    expect(onCounterValueChange).toHaveBeenCalledWith('sd-ps-004', 15);
+    expect(counterInput).toHaveValue(42);
+
+    const notesInput = screen.getByRole('textbox', { name: 'Manual notes for Achievement 1' });
+    await user.clear(notesInput);
+    await user.type(notesInput, 'unapplied note draft');
+    await user.click(screen.getByRole('button', { name: 'Save notes for Achievement 1' }));
+    expect(onNotesChange).toHaveBeenCalledWith('sd-ps-001', 'unapplied note draft');
+    expect(notesInput).toHaveValue('unapplied note draft');
+    expect(screen.getByText('Notes update could not be applied.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear notes for Achievement 1' }));
+    expect(onNotesChange).toHaveBeenCalledWith('sd-ps-001', undefined);
+    expect(notesInput).toHaveValue('unapplied note draft');
+
+    const mutatedStore = structuredClone(initialStore);
+    mutatedStore.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-002'].completed = true;
+    rerender(<AchievementTracker game={mockGameStellarDrift} set={setDefinition} store={mutatedStore} {...callbacks} />);
+    expect(counterInput).toHaveValue(42);
+    expect(screen.getByText('Counter update could not be applied.')).toBeInTheDocument();
+    expect(notesInput).toHaveValue('unapplied note draft');
+    expect(screen.getByText('Notes update could not be applied.')).toBeInTheDocument();
+
+    onCounterValueChange.mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'Apply counter for Achievement 3' }));
+    expect(screen.queryByText('Counter update could not be applied.')).not.toBeInTheDocument();
+    expect(notesInput).toHaveValue('unapplied note draft');
+    expect(screen.getByText('Notes update could not be applied.')).toBeInTheDocument();
+
+    const propStore1 = structuredClone(mutatedStore);
+    propStore1.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-004'].counterValue = 25;
+    rerender(<AchievementTracker game={mockGameStellarDrift} set={setDefinition} store={propStore1} {...callbacks} />);
+    expect(counterInput).toHaveValue(25);
+
+    onNotesChange.mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'Save notes for Achievement 1' }));
+    expect(screen.queryByText('Notes update could not be applied.')).not.toBeInTheDocument();
+
+    const propStore2 = structuredClone(propStore1);
+    propStore2.gameProgress['stellar-drift'].sets['stellar-drift-ps'].progress['sd-ps-001'].notes = 'confirmed new note';
+    rerender(<AchievementTracker game={mockGameStellarDrift} set={setDefinition} store={propStore2} {...callbacks} />);
+    expect(notesInput).toHaveValue('confirmed new note');
   });
 });

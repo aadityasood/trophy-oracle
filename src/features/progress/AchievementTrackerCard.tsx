@@ -14,13 +14,13 @@ export interface AchievementTrackerCardProps {
   gameId: string;
   setId: string;
   onBinaryCompletionChange: (achievementId: string, completed: boolean) => void;
-  onCounterValueChange: (achievementId: string, value: number) => void;
+  onCounterValueChange: (achievementId: string, value: number) => boolean;
   onChecklistItemCompletionChange: (
     achievementId: string,
     itemId: string,
     completed: boolean,
   ) => void;
-  onNotesChange: (achievementId: string, notes: string | undefined) => void;
+  onNotesChange: (achievementId: string, notes: string | undefined) => boolean;
   onCompletionOverrideChange: (
     achievementId: string,
     override: boolean,
@@ -53,8 +53,9 @@ export function AchievementTrackerCard({
   const [isRevealed, setIsRevealed] = useState(false);
   const [isConfirmingOverride, setIsConfirmingOverride] = useState(false);
   const [counterDraft, setCounterDraft] = useState<string | null>(null);
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [counterError, setCounterError] = useState<string | null>(null);
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  const [notesError, setNotesError] = useState<string | null>(null);
 
   if (!progress) {
     return (
@@ -80,21 +81,25 @@ export function AchievementTrackerCard({
 
   const clearCounterDraft = (): void => {
     setCounterDraft(null);
-    setValidationMessage(null);
+    setCounterError(null);
   };
 
   const applyCounterDraft = (): void => {
     if (displayedCounterDraft.trim() === '') {
-      setValidationMessage('Enter a non-negative whole number.');
+      setCounterError('Enter a non-negative whole number.');
       return;
     }
     const value = Number(displayedCounterDraft);
     if (!Number.isInteger(value) || value < 0) {
-      setValidationMessage('Enter a non-negative whole number.');
+      setCounterError('Enter a non-negative whole number.');
       return;
     }
-    clearCounterDraft();
-    onCounterValueChange(achievement.id, value);
+    const accepted = onCounterValueChange(achievement.id, value);
+    if (accepted) {
+      clearCounterDraft();
+    } else {
+      setCounterError('Counter update could not be applied.');
+    }
   };
 
   return (
@@ -204,11 +209,16 @@ export function AchievementTrackerCard({
                 aria-label={`Decrease counter for ${displayLabel}`}
                 disabled={isReadOnly || counterValue === 0}
                 onClick={() => {
-                  clearCounterDraft();
-                  onCounterValueChange(
+                  const targetValue = Math.max(0, counterValue - 1);
+                  const accepted = onCounterValueChange(
                     achievement.id,
-                    Math.max(0, counterValue - 1),
+                    targetValue,
                   );
+                  if (accepted) {
+                    clearCounterDraft();
+                  } else {
+                    setCounterError('Counter update could not be applied.');
+                  }
                 }}
                 className="min-w-10 rounded border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-slate-200 disabled:opacity-50"
               >
@@ -221,11 +231,16 @@ export function AchievementTrackerCard({
                   aria-label={`Add ${step} to counter for ${displayLabel}`}
                   disabled={isReadOnly}
                   onClick={() => {
-                    clearCounterDraft();
-                    onCounterValueChange(
+                    const targetValue = counterValue + step;
+                    const accepted = onCounterValueChange(
                       achievement.id,
-                      counterValue + step,
+                      targetValue,
                     );
+                    if (accepted) {
+                      clearCounterDraft();
+                    } else {
+                      setCounterError('Counter update could not be applied.');
+                    }
                   }}
                   className="min-w-10 rounded border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs text-slate-200 disabled:opacity-50"
                 >
@@ -260,9 +275,9 @@ export function AchievementTrackerCard({
                 Apply
               </button>
             </div>
-            {validationMessage && (
+            {counterError && (
               <p role="status" className="text-xs text-amber-300">
-                {validationMessage}
+                {counterError}
               </p>
             )}
           </div>
@@ -392,8 +407,13 @@ export function AchievementTrackerCard({
               disabled={isReadOnly}
               onClick={() => {
                 const valueToSave = displayedNotesDraft;
-                onNotesChange(achievement.id, valueToSave);
-                setNotesDraft(null);
+                const accepted = onNotesChange(achievement.id, valueToSave);
+                if (accepted) {
+                  setNotesDraft(null);
+                  setNotesError(null);
+                } else {
+                  setNotesError('Notes update could not be applied.');
+                }
               }}
               className="rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 disabled:opacity-50"
             >
@@ -404,14 +424,24 @@ export function AchievementTrackerCard({
               aria-label={`Clear notes for ${displayLabel}`}
               disabled={isReadOnly || progress.notes === undefined}
               onClick={() => {
-                setNotesDraft(null);
-                onNotesChange(achievement.id, undefined);
+                const accepted = onNotesChange(achievement.id, undefined);
+                if (accepted) {
+                  setNotesDraft(null);
+                  setNotesError(null);
+                } else {
+                  setNotesError('Notes update could not be applied.');
+                }
               }}
               className="rounded px-2.5 py-1 text-xs text-slate-400 disabled:opacity-50"
             >
               Clear Notes
             </button>
           </div>
+          {notesError && (
+            <p role="status" className="text-xs text-amber-300">
+              {notesError}
+            </p>
+          )}
         </div>
 
         <div className="grid gap-1 pt-1 font-mono text-[11px] text-slate-500 sm:grid-cols-3">

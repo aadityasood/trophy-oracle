@@ -555,4 +555,178 @@ describe('App foundation and tracker integration', () => {
     ).toBeDisabled();
     expect(screen.getByRole('button', { name: /Select Story stage/ })).toBeDisabled();
   });
+
+  it.each([
+    ['foreign V2 bytes', 'Saved progress changed in another session. Reload required to resume saving.'],
+    ['save-time read failure', 'Saved progress could not be checked. Reload required to resume saving.'],
+  ])('rejects counter Apply and preserves draft when %s occurs', async (fault, expectedNotice) => {
+    const user = userEvent.setup();
+    const storage = new MemoryStorage();
+    render(<App datasetResult={getDataset()} storage={storage} now={fixedNow} />);
+    await user.click(screen.getByRole('button', { name: /Stellar Drift/ }));
+
+    await user.click(screen.getByRole('checkbox', { name: 'Mark Achievement 1 complete' }));
+    const undoButton = screen.getByRole('button', {
+      name: 'Undo last change in PlayStation (Standard Edition)',
+    });
+    expect(undoButton).toBeEnabled();
+
+    const foreign = JSON.stringify({ schemaVersion: '2.0', lastGameId: 'other-game', gameProgress: {} });
+    let expectedRaw: string | null;
+    if (fault === 'foreign V2 bytes') {
+      storage.seed(DEFAULT_STORAGE_KEY, foreign);
+      expectedRaw = foreign;
+    } else {
+      expectedRaw = storage.getRawValue(DEFAULT_STORAGE_KEY);
+      storage.setReadError(new Error('save-time read error'));
+    }
+
+    const writesBefore = storage.writeCount;
+    const card = screen.getByRole('article', { name: 'Achievement 4' });
+    const input = within(card).getByRole('spinbutton', { name: 'Set counter for Achievement 4' });
+
+    await user.clear(input);
+    await user.type(input, '25');
+    await user.click(within(card).getByRole('button', { name: 'Apply counter for Achievement 4' }));
+
+    expect(input).toHaveValue(25);
+    expect(within(card).getByText('Counter update could not be applied.')).toBeInTheDocument();
+    expect(within(card).getByText('Progress: 0 / 48 (48 remaining, 0%)')).toBeInTheDocument();
+    expect(within(card).getByText('State: Incomplete')).toBeInTheDocument();
+    expect(undoButton).toBeEnabled();
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(expectedRaw);
+    expect(storage.writeCount).toBe(writesBefore);
+    expect(screen.getByText(expectedNotice)).toBeInTheDocument();
+
+    await user.clear(input);
+    await user.type(input, '30');
+    await user.click(within(card).getByRole('button', { name: 'Apply counter for Achievement 4' }));
+    expect(input).toHaveValue(30);
+    expect(within(card).getByText('Progress: 0 / 48 (48 remaining, 0%)')).toBeInTheDocument();
+    expect(undoButton).toBeEnabled();
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(expectedRaw);
+    expect(storage.writeCount).toBe(writesBefore);
+  });
+
+  it.each([
+    ['foreign V2 bytes', 'Saved progress changed in another session. Reload required to resume saving.'],
+    ['save-time read failure', 'Saved progress could not be checked. Reload required to resume saving.'],
+  ])('rejects Save Notes and preserves draft when %s occurs', async (fault, expectedNotice) => {
+    const user = userEvent.setup();
+    const storage = new MemoryStorage();
+    render(<App datasetResult={getDataset()} storage={storage} now={fixedNow} />);
+    await user.click(screen.getByRole('button', { name: /Stellar Drift/ }));
+
+    await user.click(screen.getByRole('checkbox', { name: 'Mark Achievement 2 complete' }));
+    const undoButton = screen.getByRole('button', {
+      name: 'Undo last change in PlayStation (Standard Edition)',
+    });
+    expect(undoButton).toBeEnabled();
+
+    const foreign = JSON.stringify({ schemaVersion: '2.0', lastGameId: 'other-game', gameProgress: {} });
+    let expectedRaw: string | null;
+    if (fault === 'foreign V2 bytes') {
+      storage.seed(DEFAULT_STORAGE_KEY, foreign);
+      expectedRaw = foreign;
+    } else {
+      expectedRaw = storage.getRawValue(DEFAULT_STORAGE_KEY);
+      storage.setReadError(new Error('save-time read error'));
+    }
+
+    const writesBefore = storage.writeCount;
+    const card = screen.getByRole('article', { name: 'Achievement 1' });
+    const textarea = within(card).getByRole('textbox', { name: 'Manual notes for Achievement 1' });
+
+    await user.clear(textarea);
+    await user.type(textarea, 'unapplied note draft');
+    await user.click(within(card).getByRole('button', { name: 'Save notes for Achievement 1' }));
+
+    expect(textarea).toHaveValue('unapplied note draft');
+    expect(within(card).getByText('Notes update could not be applied.')).toBeInTheDocument();
+    expect(undoButton).toBeEnabled();
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(expectedRaw);
+    expect(storage.writeCount).toBe(writesBefore);
+    expect(screen.getByText(expectedNotice)).toBeInTheDocument();
+
+    await user.clear(textarea);
+    await user.type(textarea, 'second unapplied note');
+    await user.click(within(card).getByRole('button', { name: 'Save notes for Achievement 1' }));
+    expect(textarea).toHaveValue('second unapplied note');
+    expect(undoButton).toBeEnabled();
+    expect(storage.getRawValue(DEFAULT_STORAGE_KEY)).toBe(expectedRaw);
+    expect(storage.writeCount).toBe(writesBefore);
+  });
+
+  it('acknowledges and clears drafts in-memory under session-only or physical write failure without false save', async () => {
+    const user = userEvent.setup();
+
+    const { unmount } = render(<App datasetResult={getDataset()} storage={null} now={fixedNow} />);
+    await user.click(screen.getByRole('button', { name: /Stellar Drift/ }));
+    expect(screen.getByText(/Session-only mode: progress is available in memory but will not be saved./)).toBeInTheDocument();
+
+    const card4 = screen.getByRole('article', { name: 'Achievement 4' });
+    const input4 = within(card4).getByRole('spinbutton', { name: 'Set counter for Achievement 4' });
+    await user.clear(input4);
+    await user.type(input4, '10');
+    await user.click(within(card4).getByRole('button', { name: 'Apply counter for Achievement 4' }));
+    expect(within(card4).getByText('Progress: 10 / 48 (38 remaining, 20%)')).toBeInTheDocument();
+    expect(within(card4).queryByText('Counter update could not be applied.')).not.toBeInTheDocument();
+
+    const sessionUndo = screen.getByRole('button', {
+      name: 'Undo last change in PlayStation (Standard Edition)',
+    });
+    await user.click(sessionUndo);
+    expect(input4).toHaveValue(0);
+    expect(within(card4).getByText('Progress: 0 / 48 (48 remaining, 0%)')).toBeInTheDocument();
+
+    const card1 = screen.getByRole('article', { name: 'Achievement 1' });
+    const notes1 = within(card1).getByRole('textbox', { name: 'Manual notes for Achievement 1' });
+    await user.type(notes1, 'session note');
+    await user.click(within(card1).getByRole('button', { name: 'Save notes for Achievement 1' }));
+    expect(notes1).toHaveValue('session note');
+    expect(within(card1).queryByText('Notes update could not be applied.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', {
+      name: 'Undo last change in PlayStation (Standard Edition)',
+    }));
+    expect(notes1).toHaveValue('');
+    expect(screen.getByText(/Session-only mode: progress is available in memory but will not be saved./)).toBeInTheDocument();
+    unmount();
+
+    const throwingStorage = new MemoryStorage();
+    throwingStorage.setWriteError(new Error('quota exceeded'));
+    render(<App datasetResult={getDataset()} storage={throwingStorage} now={fixedNow} />);
+    await user.click(screen.getByRole('button', { name: /Stellar Drift/ }));
+
+    const failCard4 = screen.getByRole('article', { name: 'Achievement 4' });
+    const failInput4 = within(failCard4).getByRole('spinbutton', { name: 'Set counter for Achievement 4' });
+    await user.clear(failInput4);
+    await user.type(failInput4, '15');
+    await user.click(within(failCard4).getByRole('button', { name: 'Apply counter for Achievement 4' }));
+    expect(within(failCard4).getByText('Progress: 15 / 48 (33 remaining, 31%)')).toBeInTheDocument();
+    expect(within(failCard4).queryByText('Counter update could not be applied.')).not.toBeInTheDocument();
+
+    const failUndo = screen.getByRole('button', {
+      name: 'Undo last change in PlayStation (Standard Edition)',
+    });
+    await user.click(failUndo);
+    expect(failInput4).toHaveValue(0);
+    expect(within(failCard4).getByText('Progress: 0 / 48 (48 remaining, 0%)')).toBeInTheDocument();
+
+    expect(screen.getByText(/Progress not saved:.*quota exceeded/)).toBeInTheDocument();
+    expect(throwingStorage.getRawValue(DEFAULT_STORAGE_KEY)).toBeNull();
+
+    const failCard1 = screen.getByRole('article', { name: 'Achievement 1' });
+    const failNotes1 = within(failCard1).getByRole('textbox', { name: 'Manual notes for Achievement 1' });
+    await user.type(failNotes1, 'offline notes');
+    await user.click(within(failCard1).getByRole('button', { name: 'Save notes for Achievement 1' }));
+    expect(failNotes1).toHaveValue('offline notes');
+    expect(within(failCard1).queryByText('Notes update could not be applied.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', {
+      name: 'Undo last change in PlayStation (Standard Edition)',
+    }));
+    expect(failNotes1).toHaveValue('');
+    expect(throwingStorage.getRawValue(DEFAULT_STORAGE_KEY)).toBeNull();
+  });
 });
