@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { PlatformId } from '../../domain/achievement-schema';
 import { getPlatformRoadmapLabel } from '../../domain/achievement-schema';
 import type { StageId, StageSummary } from '../../domain/progress-view';
@@ -28,9 +29,11 @@ export function RoadmapProgress({
   onSelectActiveStage,
   isReadOnly = false,
 }: RoadmapProgressProps) {
+  const headingId = useId();
+
   return (
     <section
-      aria-labelledby="roadmap-heading"
+      aria-labelledby={headingId}
       className="rounded-lg border border-slate-800 border-l-4 bg-slate-900 p-5 space-y-4"
       style={{ borderLeftColor: 'var(--theme-surface-glow)' }}
     >
@@ -39,7 +42,7 @@ export function RoadmapProgress({
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
             Platform roadmap
           </div>
-          <h3 id="roadmap-heading" className="text-base font-bold text-slate-100">
+          <h3 id={headingId} className="text-base font-bold text-slate-100">
             {getPlatformRoadmapLabel(platform)}
           </h3>
         </div>
