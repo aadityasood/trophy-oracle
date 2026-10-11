@@ -105,10 +105,10 @@ export function getRawExportOptions(
   if (typeof rawV2Current === 'string') {
     exports.push({
       id: 'v2-current',
-      label: 'Current V2 progress',
+      label: 'Retained V2 progress',
       filename: 'trophy-oracle-progress-v2-current.json',
       rawBytes: rawV2Current,
-      description: 'Current raw Schema 2.0 progress stored under the live V2 key.',
+      description: 'Retained raw Schema 2.0 progress snapshot; current storage presence is unconfirmed.',
     });
   }
 
@@ -125,10 +125,10 @@ export function getRawExportOptions(
   if (typeof rawV3 === 'string') {
     exports.push({
       id: 'v3',
-      label: 'Authoritative V3 progress',
+      label: 'Raw V3 progress',
       filename: 'trophy-oracle-progress-v3.json',
       rawBytes: rawV3,
-      description: 'Authoritative Schema 3.0 progress stored under the active V3 key.',
+      description: 'Retained raw Schema 3.0 progress snapshot; current storage presence is unconfirmed.',
     });
   }
 
@@ -138,7 +138,7 @@ export function getRawExportOptions(
       label: 'Cutover record',
       filename: 'trophy-oracle-progress-v3-cutover-record.json',
       rawBytes: rawCutover,
-      description: 'Immutable metadata recording Schema 3.0 initialization provenance.',
+      description: 'Retained raw Schema 3.0 cutover metadata snapshot; current storage presence is unconfirmed.',
     });
   }
 
