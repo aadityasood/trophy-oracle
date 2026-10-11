@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProgressV3CutoverRecord } from '../../data/hunt-memory-storage';
 import { createDefaultHuntMemoryStore } from '../../data/hunt-memory-storage';
 import {
@@ -61,10 +61,10 @@ describe('hunt-memory-export', () => {
       expect(options).toHaveLength(1);
       expect(options[0]).toEqual({
         id: 'v2-current',
-        label: 'Current V2 progress',
+        label: 'Retained V2 progress',
         filename: 'trophy-oracle-progress-v2-current.json',
         rawBytes: '{"schemaVersion":"2.0","upgradable":true}',
-        description: 'Current raw Schema 2.0 progress stored under the live V2 key.',
+        description: 'Retained raw Schema 2.0 progress snapshot; current storage presence is unconfirmed.',
       });
     });
 
@@ -83,10 +83,10 @@ describe('hunt-memory-export', () => {
       expect(options).toHaveLength(1);
       expect(options[0]).toEqual({
         id: 'v3',
-        label: 'Authoritative V3 progress',
+        label: 'Raw V3 progress',
         filename: 'trophy-oracle-progress-v3.json',
         rawBytes: '',
-        description: 'Authoritative Schema 3.0 progress stored under the active V3 key.',
+        description: 'Retained raw Schema 3.0 progress snapshot; current storage presence is unconfirmed.',
       });
 
       const failureWithEmptyKeys: FailureHookState = {
@@ -103,6 +103,13 @@ describe('hunt-memory-export', () => {
       expect(failureOptions.map((o) => o.id)).toEqual(['v2-current', 'cutover-record']);
       expect(failureOptions[0].rawBytes).toBe('');
       expect(failureOptions[1].rawBytes).toBe('');
+      expect(failureOptions[1].description).toBe(
+        'Retained raw Schema 3.0 cutover metadata snapshot; current storage presence is unconfirmed.',
+      );
+      expect(failureOptions[1].description).not.toMatch(
+        /immutable|provenance|authoritative|validated/i,
+      );
+      expect(failureOptions[1].label).not.toMatch(/authoritative|validated/i);
     });
 
     it('returns all 4 distinct options for migrated ready state with V2 intact', () => {
@@ -127,6 +134,12 @@ describe('hunt-memory-export', () => {
       expect(options[1].filename).toBe('trophy-oracle-progress-v2-cutover-backup.json');
       expect(options[2].filename).toBe('trophy-oracle-progress-v3.json');
       expect(options[3].filename).toBe('trophy-oracle-progress-v3-cutover-record.json');
+      expect(options[0].description).toBe(
+        'Retained raw Schema 2.0 progress snapshot; current storage presence is unconfirmed.',
+      );
+      expect(options[1].description).toBe(
+        'Immutable original Schema 2.0 bytes preserved at cutover time.',
+      );
     });
 
     it('preserves distinct bytes when legacy V2 diverges from cutover backup', () => {
@@ -212,9 +225,38 @@ describe('hunt-memory-export', () => {
         rawBytes: v2Token,
       });
     });
+    it('preserves exact raw string bytes including Unicode and whitespace', () => {
+      const unicodeWhitespaceV3 = '  \n\t{"note": "🏆 ⚔️ 日本語", "spaces": "   "} \r\n';
+      const recoveryState: RecoveryRequiredHookState = {
+        status: 'recovery-required',
+        reason: 'INVALID_V3',
+        message: 'Malformed',
+        store: null,
+        rawV3: unicodeWhitespaceV3,
+      };
+
+      const options = getRawExportOptions(recoveryState);
+      expect(options).toHaveLength(1);
+      expect(options[0]).toEqual({
+        id: 'v3',
+        label: 'Raw V3 progress',
+        filename: 'trophy-oracle-progress-v3.json',
+        rawBytes: unicodeWhitespaceV3,
+        description: 'Retained raw Schema 3.0 progress snapshot; current storage presence is unconfirmed.',
+      });
+    });
   });
 
   describe('defaultRawDownload', () => {
+    const originalCreateObjectURL = window.URL.createObjectURL;
+    const originalRevokeObjectURL = window.URL.revokeObjectURL;
+
+    afterEach(() => {
+      window.URL.createObjectURL = originalCreateObjectURL;
+      window.URL.revokeObjectURL = originalRevokeObjectURL;
+      vi.restoreAllMocks();
+    });
+
     it('creates Blob with application/json, triggers anchor click, and cleans up URL', () => {
       const mockCreateObjectURL = vi.fn((blob: Blob) => `blob:mock-url-${blob.size}`);
       const mockRevokeObjectURL = vi.fn();
