@@ -11,11 +11,17 @@ import type { StorageLike } from './data/progress-storage';
 import { useProgressStore } from './features/progress/use-progress-store';
 import { AchievementTracker } from './features/progress/AchievementTracker';
 import { ProgressOverview } from './features/progress/ProgressOverview';
+import HuntMemoryApp, {
+  type HuntMemorySessionConfig,
+} from './HuntMemoryApp';
+
+export type { HuntMemorySessionConfig };
 
 export interface AppProps {
   datasetResult?: DatasetLoadResult;
   storage?: StorageLike | null;
   now?: () => string;
+  huntMemorySession?: HuntMemorySessionConfig;
 }
 
 const EMPTY_GAMES: GameRecord[] = [];
@@ -39,7 +45,7 @@ function getSetLabel(set: AchievementSet): string {
   return `${platformLabels[set.platform]}${edition}`;
 }
 
-export default function App({
+function LegacyApp({
   datasetResult = loadDemoGamesDataset(),
   storage,
   now,
@@ -449,4 +455,16 @@ export default function App({
       </main>
     </div>
   );
+}
+
+export default function App(props: AppProps) {
+  if (props.huntMemorySession !== undefined) {
+    return (
+      <HuntMemoryApp
+        datasetResult={props.datasetResult}
+        session={props.huntMemorySession}
+      />
+    );
+  }
+  return <LegacyApp {...props} />;
 }
