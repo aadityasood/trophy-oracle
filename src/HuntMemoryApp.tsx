@@ -1,5 +1,5 @@
 import {
-  useCallback, useId, useMemo, useRef, useState,
+  useCallback, useEffect, useId, useMemo, useRef, useState,
   type CSSProperties, type ReactElement,
 } from 'react';
 import type {
@@ -10,7 +10,7 @@ import type { StorageLike } from './data/progress-storage';
 import type { HuntMemoryStorageKeys } from './data/hunt-memory-storage';
 import type { WebLockManagerLike } from './data/hunt-memory-write-lock';
 import {
-  createDefaultGameProgressV3, DEFAULT_HUNT_MEMORY_RUN_ID, selectRun,
+  createDefaultGameProgressV3, createRun, DEFAULT_HUNT_MEMORY_RUN_ID, selectRun,
 } from './domain/hunt-memory-lifecycle';
 import {
   setRunActiveStage, setRunBinaryCompletion, setRunChecklistItemCompletion,
@@ -21,7 +21,7 @@ import type {
   CounterProgress, LocalProgressStoreV3, ProgressUndoSnapshotV3,
 } from './domain/hunt-memory-schema';
 import { selectActiveWorkspaceV3, type StageId } from './domain/hunt-memory-view';
-import { useHuntMemoryStore, type DomainMutationResult } from './features/progress/use-hunt-memory-store';
+import { useHuntMemoryStore, type DomainMutationResult, type HuntMemoryActionResult } from './features/progress/use-hunt-memory-store';
 import { HuntMemorySafetyPanel } from './features/progress/HuntMemorySafetyPanel';
 import { HuntMemoryProgressOverview } from './features/progress/HuntMemoryProgressOverview';
 import { HuntMemoryTracker, type HuntMemoryTrackerContext } from './features/progress/HuntMemoryTracker';
@@ -124,6 +124,35 @@ function formatSafeWorkspaceError(reason: string, message: string): string {
   }
 }
 
+function getSafeCreationErrorMessage(res: HuntMemoryActionResult): string {
+  switch (res.status) {
+    case 'retryable-failure':
+      return 'Run creation could not be saved to storage. Retry or discard in Safety Panel.';
+    case 'recovery-required':
+      return 'Storage is in an unverified state; creation outcome unconfirmed.';
+    case 'failure':
+      return 'Storage error occurred; creation outcome unconfirmed.';
+    case 'busy':
+      return 'An operation is already in progress.';
+    case 'mutation-failed':
+      if (res.code === 'INVALID_RUN_NAME') return 'Run name is invalid. Enter a non-blank run name.';
+      if (res.code === 'DUPLICATE_RUN_ID') return 'A run with this identifier already exists.';
+      if (res.code === 'INVALID_TIMESTAMP') return 'System clock error. Please try again.';
+      return 'Run creation could not be validated. Check the run name and try again.';
+    case 'blocked':
+      return 'Operation is currently blocked. Please wait or resolve existing issues.';
+    default:
+      return 'Run creation encountered an unexpected error.';
+  }
+}
+
+function isFormRelevant(
+  live: { gameId?: string; setId?: string; lifetimeId: number; name: string; isOpen: boolean },
+  target: { gameId: string; setId: string; lifetimeId: number; name: string },
+): boolean {
+  return live.isOpen && live.lifetimeId === target.lifetimeId && live.name === target.name && live.gameId === target.gameId && live.setId === target.setId;
+}
+
 interface HuntMemoryAppInnerProps {
   dataset: DemoGamesDataset;
   session: HuntMemorySessionConfig;
@@ -149,6 +178,20 @@ function HuntMemoryAppInner({
   const [previewGameId, setPreviewGameId] = useState<string | undefined>();
   const [previewSetId, setPreviewSetId] = useState<string | undefined>();
   const [previewRunId, setPreviewRunId] = useState<string | undefined>();
+
+  const [isNewRunOpen, setIsNewRunOpen] = useState(false);
+  const [newRunName, setNewRunName] = useState('');
+  const [newRunFeedback, setNewRunFeedback] = useState<string | null>(null);
+  const [isSubmittingRun, setIsSubmittingRun] = useState(false);
+  const isSubmittingRunRef = useRef(false);
+  const [formLifetime, setFormLifetime] = useState(0);
+  const attemptedCreationRef = useRef<{
+    lifetimeId: number;
+    gameId: string;
+    setId: string;
+    runId: string;
+    name: string;
+  } | null>(null);
 
   const games = dataset.games;
 
@@ -184,6 +227,38 @@ function HuntMemoryAppInner({
     () => selectedGame?.achievementSets.find((s) => s.id === activeSetId),
     [selectedGame, activeSetId],
   );
+
+  const [prevContext, setPrevContext] = useState({
+    gameId: selectedGame?.id,
+    setId: selectedSet?.id,
+  });
+  if (
+    prevContext.gameId !== selectedGame?.id ||
+    prevContext.setId !== selectedSet?.id
+  ) {
+    setPrevContext({ gameId: selectedGame?.id, setId: selectedSet?.id });
+    setIsNewRunOpen(false);
+    setNewRunName('');
+    setNewRunFeedback(null);
+    setFormLifetime((v) => v + 1);
+  }
+
+  const currentFormRef = useRef({
+    lifetimeId: formLifetime,
+    isOpen: isNewRunOpen,
+    name: newRunName,
+    gameId: selectedGame?.id,
+    setId: selectedSet?.id,
+  });
+  useEffect(() => {
+    currentFormRef.current = {
+      lifetimeId: formLifetime,
+      isOpen: isNewRunOpen,
+      name: newRunName,
+      gameId: selectedGame?.id,
+      setId: selectedSet?.id,
+    };
+  });
 
   const setProgress =
     gameProgress &&
@@ -227,6 +302,170 @@ function HuntMemoryAppInner({
       },
     };
   }, [store.store, selectedGame, selectedSet, setProgress, gameProgress, activeRunId]);
+
+  const workspace =
+    selectedGame && selectedSet && displayStore
+      ? selectActiveWorkspaceV3(selectedGame, selectedSet.id, displayStore)
+      : undefined;
+
+  const formattedRuns = useMemo(() => {
+    if (!setProgress) return [];
+    const runs = Object.values(setProgress.runs);
+    const norm = (s: string) => s.trim().replace(/\s+/g, ' '), counts = new Map<string, number>();
+    for (const r of runs) counts.set(norm(r.name), (counts.get(norm(r.name)) ?? 0) + 1);
+    const reserved = new Set(runs.filter((r) => counts.get(norm(r.name)) === 1).map((r) => norm(r.name)));
+    const used = new Set<string>(), ordinals = new Map<string, number>();
+    return runs.map((r) => {
+      const key = norm(r.name);
+      let candidate = r.name;
+      if ((counts.get(key) ?? 0) > 1 || used.has(norm(candidate))) {
+        let k = (ordinals.get(key) ?? 0) + 1;
+        do { candidate = `${key} (${k++})`; } while (reserved.has(norm(candidate)) || used.has(norm(candidate)));
+        ordinals.set(key, k - 1);
+      }
+      used.add(norm(candidate));
+      return { runId: r.runId, displayName: candidate };
+    });
+  }, [setProgress]);
+
+  const handleOpenNewRun = () => {
+    setFormLifetime((v) => v + 1);
+    setIsNewRunOpen(true);
+    setNewRunFeedback(null);
+  };
+
+  const handleCancelNewRun = () => {
+    if (isSubmittingRun) return;
+    setFormLifetime((v) => v + 1);
+    setIsNewRunOpen(false);
+    setNewRunName('');
+    setNewRunFeedback(null);
+  };
+
+  const canSubmitNewRun =
+    newRunName.trim().length > 0 &&
+    workspace?.status === 'ready' &&
+    store.canSave &&
+    !isSubmittingRun;
+
+  const handleSubmitNewRun = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSubmittingRunRef.current) return;
+    if (!canSubmitNewRun || !selectedGame || !selectedSet) return;
+
+    isSubmittingRunRef.current = true;
+    setIsSubmittingRun(true);
+    setNewRunFeedback(null);
+
+    const targetGame = selectedGame;
+    const targetSet = selectedSet;
+    const targetName = newRunName;
+    const targetLifetimeId = formLifetime;
+    const submitIntent = {
+      game: navIntentRef.current.game,
+      set: navIntentRef.current.set,
+      run: navIntentRef.current.run,
+    };
+
+    let allocatedRunId = '';
+
+    try {
+      const res = await store.mutate((currentStore, timestamp) => {
+        const gp = currentStore.gameProgress[targetGame.id];
+        const sp = gp?.sets[targetSet.id];
+        const existingRuns = sp?.runs ?? {};
+        let nextIndex = 1;
+        while (Object.hasOwn(existingRuns, `run-${nextIndex}`)) {
+          nextIndex++;
+        }
+        allocatedRunId = `run-${nextIndex}`;
+        const createResult = createRun(
+          currentStore,
+          targetGame,
+          targetSet.id,
+          allocatedRunId,
+          targetName,
+          timestamp,
+        );
+        if (!createResult.success) {
+          return { success: false, code: createResult.code, message: createResult.message };
+        }
+        return { success: true, store: createResult.store, changed: true };
+      });
+
+      const attempt = {
+        lifetimeId: targetLifetimeId,
+        gameId: targetGame.id,
+        setId: targetSet.id,
+        runId: allocatedRunId,
+        name: targetName,
+      };
+
+      const live = currentFormRef.current;
+      const relevant = isFormRelevant(live, attempt);
+
+      if (res.status === 'success') {
+        attemptedCreationRef.current = null;
+        const confirmedRun =
+          res.store.gameProgress[targetGame.id]?.sets[targetSet.id]?.runs[allocatedRunId];
+        if (confirmedRun?.name === targetName && relevant) {
+          setIsNewRunOpen(false);
+          setNewRunName('');
+          setNewRunFeedback(null);
+        }
+
+        if (navIntentRef.current.run === submitIntent.run) {
+          setPreviewRunId(undefined);
+        }
+      } else {
+        if (res.status === 'retryable-failure') {
+          attemptedCreationRef.current = attempt;
+        }
+        if (relevant) {
+          setNewRunFeedback(getSafeCreationErrorMessage(res));
+        }
+      }
+    } catch {
+      if (isFormRelevant(currentFormRef.current, { gameId: targetGame.id, setId: targetSet.id, lifetimeId: targetLifetimeId, name: targetName })) {
+        setNewRunFeedback('Run creation encountered an unexpected error.');
+      }
+    } finally {
+      isSubmittingRunRef.current = false;
+      setIsSubmittingRun(false);
+    }
+  };
+
+  const handleRetry = useCallback(async () => {
+    const res = await store.retry();
+    const attempt = attemptedCreationRef.current;
+    if (res.status === 'success') {
+      if (attempt) {
+        const confirmedRun =
+          res.store.gameProgress[attempt.gameId]?.sets[attempt.setId]?.runs[attempt.runId];
+        if (confirmedRun?.name === attempt.name && isFormRelevant(currentFormRef.current, attempt)) {
+          setIsNewRunOpen(false);
+          setNewRunName('');
+          setNewRunFeedback(null);
+        }
+        attemptedCreationRef.current = null;
+      }
+    } else if (attempt && isFormRelevant(currentFormRef.current, attempt)) {
+      setNewRunFeedback(getSafeCreationErrorMessage(res));
+    }
+    return res;
+  }, [store]);
+
+  const handleDiscard = useCallback(() => {
+    const res = store.discard();
+    if (res.status === 'success') {
+      const attempt = attemptedCreationRef.current;
+      attemptedCreationRef.current = null;
+      if (attempt && isFormRelevant(currentFormRef.current, attempt)) {
+        setNewRunFeedback(null);
+      }
+    }
+    return res;
+  }, [store]);
 
   const handleSelectGame = (game: GameRecord) => {
     const intentId = ++navIntentRef.current.game;
@@ -414,15 +653,12 @@ function HuntMemoryAppInner({
       } as CSSProperties)
     : {};
 
-  const workspace =
-    selectedGame && selectedSet && displayStore
-      ? selectActiveWorkspaceV3(selectedGame, selectedSet.id, displayStore)
-      : undefined;
-
   const searchInputId = `${baseId}-search`;
   const gamesHeadingId = `${baseId}-games`;
   const gameDetailsHeadingId = `${baseId}-details`;
   const activeRunSelectId = `${baseId}-run`;
+  const newRunInputId = `${baseId}-new-run-name`;
+  const newRunFeedbackId = `${baseId}-new-run-feedback`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans" style={themeStyles}>
@@ -447,8 +683,8 @@ function HuntMemoryAppInner({
         <HuntMemorySafetyPanel
           state={store}
           onUpgrade={() => store.upgrade()}
-          onRetry={() => store.retry()}
-          onDiscard={() => store.discard()}
+          onRetry={handleRetry}
+          onDiscard={handleDiscard}
           onReload={onReload}
           onDownload={session.download}
         />
@@ -543,18 +779,80 @@ function HuntMemoryAppInner({
               )}
 
               {setProgress && Object.keys(setProgress.runs).length > 0 && (
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-800/60">
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/60">
                   <label htmlFor={activeRunSelectId} className="text-xs font-semibold text-slate-400">Active run:</label>
                   <select
                     id={activeRunSelectId}
                     value={activeRunId}
                     onChange={(e) => handleSelectRun(e.target.value)}
-                    className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="min-w-0 max-w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
-                    {Object.values(setProgress.runs).map((run) => (
-                      <option key={run.runId} value={run.runId}>{run.name}</option>
+                    {formattedRuns.map((run) => (
+                      <option key={run.runId} value={run.runId}>{run.displayName}</option>
                     ))}
                   </select>
+
+                  {!isNewRunOpen ? (
+                    <button
+                      type="button"
+                      onClick={handleOpenNewRun}
+                      className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs font-medium text-slate-300 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    >
+                      New run
+                    </button>
+                  ) : (
+                    <form
+                      onSubmit={handleSubmitNewRun}
+                      className="flex flex-wrap items-center gap-2"
+                    >
+                      <label htmlFor={newRunInputId} className="text-xs font-semibold text-slate-400">
+                        Run name:
+                      </label>
+                      <input
+                        id={newRunInputId}
+                        type="text"
+                        value={newRunName}
+                        onChange={(e) => {
+                          setNewRunName(e.target.value);
+                          if (newRunFeedback) setNewRunFeedback(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            handleCancelNewRun();
+                          }
+                        }}
+                        aria-describedby={newRunFeedback ? newRunFeedbackId : undefined}
+                        placeholder="Enter run name..."
+                        className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 placeholder-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!canSubmitNewRun}
+                        className="rounded bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      >
+                        Create run
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelNewRun}
+                        disabled={isSubmittingRun}
+                        className="rounded border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      >
+                        Cancel
+                      </button>
+                      {newRunFeedback && (
+                        <p
+                          id={newRunFeedbackId}
+                          role="status"
+                          aria-live="polite"
+                          className="w-full text-xs text-amber-400"
+                        >
+                          {newRunFeedback}
+                        </p>
+                      )}
+                    </form>
+                  )}
                 </div>
               )}
             </div>

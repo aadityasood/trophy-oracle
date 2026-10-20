@@ -231,7 +231,7 @@ function HuntMemoryTrackerInner({
             Achievement Trackers{isReady ? ` (${workspace.set.achievements.length})` : ''}
           </h3>
           {isReady && (
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-400 [overflow-wrap:anywhere]">
               {formatSetLabel(workspace.set)} / Run: {workspace.activeRun.name}
             </p>
           )}
@@ -243,7 +243,7 @@ function HuntMemoryTrackerInner({
             onClick={handleUndo}
             disabled={!undoTarget.isEligible}
             aria-describedby={undoDescribedBy}
-            className="rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+            className="max-w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-left text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 [overflow-wrap:anywhere]"
           >
             {undoTarget.undoButtonLabel}
           </button>
