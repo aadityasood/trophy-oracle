@@ -642,11 +642,10 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     const { unmount } = render(<HuntMemoryApp datasetResult={TEST_DATASET} session={createSession({ storage, clock })} />);
     const baselineClockCalls = clock.mock.calls.length;
 
-    const newRunBtn = screen.getByRole('button', { name: /^New run$/i });
-    await user.click(newRunBtn);
+    await user.click(screen.getByRole('button', { name: /^New run$/i }));
 
     const runNameInput = screen.getByLabelText(/Run name/i);
-    const createRunSubmit = screen.getByRole('button', { name: /^Create run$/i });
+    const createRunSubmit = within(runNameInput.closest('form')!).getByRole('button', { name: /^Create run$/i });
 
     expect(createRunSubmit).toBeDisabled();
     await user.type(runNameInput, ' ');
@@ -661,10 +660,10 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
 
     await user.click(screen.getByRole('button', { name: /^New run$/i }));
     const reopenedInput = screen.getByLabelText(/Run name/i);
+    const reopenedSubmit = within(reopenedInput.closest('form')!).getByRole('button', { name: /^Create run$/i });
     await user.type(reopenedInput, ' P ');
-    expect(screen.getByRole('button', { name: /^Create run$/i })).toBeEnabled();
-
-    await user.click(screen.getByRole('button', { name: /^Create run$/i }));
+    expect(reopenedSubmit).toBeEnabled();
+    await user.click(reopenedSubmit);
     expect(screen.queryByLabelText(/Run name/i)).toBeNull();
 
     const runSelect = screen.getByRole('combobox', { name: /Active run/i });
@@ -677,14 +676,15 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     expect(RunProgressSchema.safeParse(storedRun2).success).toBe(true);
 
     await user.click(screen.getByRole('button', { name: /^New run$/i }));
-    await user.type(screen.getByLabelText(/Run name/i), 'toString');
-    await user.click(screen.getByRole('button', { name: /^Create run$/i }));
-
+    const proto1 = screen.getByLabelText(/Run name/i);
+    await user.type(proto1, 'toString');
+    await user.click(within(proto1.closest('form')!).getByRole('button', { name: /^Create run$/i }));
     expect(runSelect).toHaveValue('run-3');
 
     await user.click(screen.getByRole('button', { name: /^New run$/i }));
-    await user.type(screen.getByLabelText(/Run name/i), 'toString');
-    await user.click(screen.getByRole('button', { name: /^Create run$/i }));
+    const proto2 = screen.getByLabelText(/Run name/i);
+    await user.type(proto2, 'toString');
+    await user.click(within(proto2.closest('form')!).getByRole('button', { name: /^Create run$/i }));
 
     expect(runSelect).toHaveValue('run-4');
     const options = Array.from(runSelect.querySelectorAll('option'), (o) => o.textContent);
@@ -731,7 +731,7 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
 
     await user.click(screen.getByRole('button', { name: /^New run$/i }));
     await user.type(screen.getByLabelText(/Run name/i), 'Fresh Run');
-    await user.click(screen.getByRole('button', { name: /^Create run$/i }));
+    await user.click(within(screen.getByLabelText(/Run name/i).closest('form')!).getByRole('button', { name: /^Create run$/i }));
 
     const runSelect = screen.getByRole('combobox', { name: /Active run/i });
     expect(runSelect).toHaveValue('run-1');
@@ -854,22 +854,23 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /^New run$/i }));
-    await user.type(screen.getByLabelText(/Run name/i), 'Fast');
-
+    const runNameInput = screen.getByLabelText(/Run name/i);
+    await user.type(runNameInput, 'Fast');
     lockManager.shouldDefer = true;
-    const createBtn = screen.getByRole('button', { name: /^Create run$/i });
-    const cancelBtn = screen.getByRole('button', { name: /^Cancel$/i });
+    const createBtn = within(runNameInput.closest('form')!).getByRole('button', { name: /^Create run$/i });
+    const cancelBtn = within(runNameInput.closest('form')!).getByRole('button', { name: /^Cancel$/i });
 
     act(() => {
       createBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
       createBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
+    await act(async () => {});
 
     expect(lockManager.deferredResolver).toBeTypeOf('function');
     expect(createBtn).toBeDisabled();
     expect(cancelBtn).toBeDisabled();
     expect(screen.queryByText(/already in progress|encounter|fail/i)).toBeNull();
-    await user.type(screen.getByLabelText(/Run name/i), ' Newer');
+    await user.type(runNameInput, ' Newer');
 
     await act(async () => {
       await lockManager.deferredResolver!();
@@ -903,7 +904,7 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     await user.click(screen.getByRole('button', { name: /^New run$/i }));
     const clockInput = screen.getByLabelText(/Run name/i);
     await user.type(clockInput, 'Bad');
-    const clockSubmit = screen.getByRole('button', { name: /^Create run$/i });
+    const clockSubmit = within(clockInput.closest('form')!).getByRole('button', { name: /^Create run$/i });
     await user.click(clockSubmit);
 
     expect(await screen.findByText(/System clock error\. Please try again\./i)).toBeInTheDocument();
@@ -918,7 +919,7 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     expect(screen.queryByText(/__RAW_CLOCK_EXCEPTION__/)).toBeNull();
     expect(clockInput).toHaveValue('Bad');
     expect(clockSubmit).toBeEnabled();
-    expect(screen.getByRole('button', { name: /^Cancel$/i })).toBeEnabled();
+    expect(within(clockInput.closest('form')!).getByRole('button', { name: /^Cancel$/i })).toBeEnabled();
     expect(clockStorage.writeCount).toBe(0);
   });
 
@@ -955,7 +956,7 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     expect(browsingInput).toHaveValue('D');
 
     lockManager.shouldDefer = true;
-    const createBtn = screen.getByRole('button', { name: /^Create run$/i });
+    const createBtn = within(browsingInput.closest('form')!).getByRole('button', { name: /^Create run$/i });
     await user.click(createBtn);
     expect(lockManager.deferredResolver).toBeTypeOf('function');
     const oldDeferred = lockManager.deferredResolver!;
@@ -978,7 +979,7 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     expect(freshInput).toHaveValue('D');
     expect(getStoredRun(storage, mockGameStellarDrift.id, 'stellar-drift-ps', 'run-1')?.name).toBe('D');
 
-    await user.click(screen.getByRole('button', { name: /^Create run$/i }));
+    await user.click(within(freshInput.closest('form')!).getByRole('button', { name: /^Create run$/i }));
     const failDeferred = lockManager.deferredResolver!;
 
     await user.click(screen.getByRole('button', { name: new RegExp(mockGameMythHarbor.title, 'i') }));
@@ -1005,7 +1006,7 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
 
     storage.setWriteError(null);
     lockManager.shouldDefer = false;
-    await user.click(screen.getByRole('button', { name: /^Create run$/i }));
+    await user.click(within(failInput.closest('form')!).getByRole('button', { name: /^Create run$/i }));
     expect(screen.queryByLabelText(/Run name/i)).toBeNull();
 
     const createdFreshRun = getStoredRun(storage, mockGameStellarDrift.id, 'stellar-drift-ps', 'run-2')!;
@@ -1021,7 +1022,7 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     await user.click(screen.getByRole('button', { name: /^New run$/i }));
     const viewOnlyInput = screen.getByLabelText(/Run name/i);
     await user.type(viewOnlyInput, 'D');
-    const viewOnlySubmit = screen.getByRole('button', { name: /^Create run$/i });
+    const viewOnlySubmit = within(viewOnlyInput.closest('form')!).getByRole('button', { name: /^Create run$/i });
     expect(viewOnlySubmit).toBeDisabled();
     expect(storage.writeCount).toBe(initialWrites);
     expect(viewOnlyInput).not.toHaveAttribute('aria-describedby');
