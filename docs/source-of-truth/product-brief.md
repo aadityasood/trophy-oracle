@@ -4,7 +4,7 @@
 
 Trophy Oracle is a local-first, spoiler-aware completion cockpit. It remembers the active hunt and helps a player safely finish a game.
 
-Platform profiles and public trackers record lifetime trophy and achievement unlocks. They do not preserve active playthrough context, separate multiple runs, or track incomplete counters that the game hides. Trophy Oracle fills that gap with private completion state. Planned Hunt Memory and grounded Oracle work will add run context, uncertain progress, session planning, and evidence-bound guidance.
+Platform profiles and public trackers record lifetime trophy and achievement unlocks. They do not preserve active playthrough context, separate multiple runs, or track incomplete counters that the game hides. Trophy Oracle fills that gap with private completion state. Hunt Memory runtime features (Run Ledger and Honest Counters) are supplied by the normal browser entry, while grounded Oracle work, session planning, and evidence-bound guidance remain planned.
 
 Trophy Oracle is not a social network, leaderboard, profile showcase, or generic game backlog tracker. It complements official platforms and community guides by owning active completion state.
 
@@ -12,7 +12,7 @@ Trophy Oracle is not a social network, leaderboard, profile showcase, or generic
 
 The working application is a deterministic React foundation built around bundled fictional demo data. It supports game search, platform and edition set selection, manual progress tracking, a three-stage roadmap, set-local pins, notes, one game-scoped undo snapshot, spoiler controls, and deterministic Oracle Focus recommendations.
 
-The target architecture adds Hunt Memory and a grounded local Oracle. Retrieval, inference-backed questions and answers, generated explanations, citation validation, confidence reporting, evaluation views, and the AI Lab are planned. They are not part of the current application.
+The candidate architecture provides Hunt Memory V3 in the normal browser entry, while retrieval, inference-backed questions and answers, generated explanations, citation validation, confidence reporting, evaluation views, and the AI Lab are planned. They are not part of the current application.
 
 ## V1 Proving Experience
 
@@ -34,13 +34,13 @@ Today, a player can:
 6. Review deterministic Oracle Focus recommendations and reveal protected details when ready.
 7. Restore the latest game, preferred set, active stage, and set-local progress from browser storage when valid saved data exists.
 
-The planned Hunt Memory and Oracle flow will add named runs, honest certainty, parked-session summaries, point-of-no-return checks, approximate session planning, grounded questions and answers, and visible recommendation receipts.
+The candidate flow provides named runs and honest certainty via Hunt Memory V3, while parked-session summaries, point-of-no-return checks, approximate session planning, grounded questions and answers, and visible recommendation receipts remain planned.
 
 ## Signature Feature Family: Hunt Memory
 
-Hunt Memory is the planned state layer for active completion runs. It captures the ephemeral details that platform APIs and generic trackers ignore.
+Hunt Memory is the state layer for active completion runs. It captures the ephemeral details that platform APIs and generic trackers ignore.
 
-Hunt Memory includes four core capabilities (planned for future phases):
+Hunt Memory includes core capabilities across candidate and planned phases: Run Ledger and Honest Counters are implemented in the candidate V3 runtime, while Resume Capsule and Safety Gate remain planned for future phases:
 
 1. **Run Ledger**
    - Stores named playthrough contexts (such as Blind Run, Cleanup Run, or New Game Plus).
@@ -112,18 +112,18 @@ The current codebase is a working local foundation using bundled demo data.
 
 - Three fictional demo games with PlayStation, Xbox, and Steam achievement sets.
 - Independent progress tracking, completion math, pins, active stage, and orphan quarantine for each platform and edition set.
-- Versioned browser-local progress with one game-scoped undo snapshot for the latest set mutation.
+- Versioned browser-local progress with run-aware undo in candidate Hunt Memory V3, and one game-scoped undo snapshot for the latest set mutation in legacy V2.
 - Tracking modes for binary checkboxes, bounded/open counters, and multi-item checklists.
 - Focus Board supporting up to 5 pinned achievements per set with quick controls.
 - Three-stage roadmap (Story, Missables, Grind/Cleanup) with persisted active stage and dynamic platform labels ("Platinum Roadmap" or "100% Roadmap").
 - Deterministic, spoiler-safe Oracle Focus recommendations prioritizing warnings, active stage match, partial progress, and canonical ordering.
 - Spoiler protections that mask hidden details until the player chooses to reveal them.
 - Game-specific accent theme colors.
-- Read-only protection for unsupported saved-data versions and session-only behavior when browser storage is unavailable.
+- Read-only protection for unsupported saved-data versions, and fail-closed view-only behavior when browser storage or Web Locks are unavailable.
 
 ### Required Before V1 Is Complete
 
-- Hunt Memory runtime features required by the pilot: Run Ledger and Honest Counters (the Schema 3.0 data contract is defined; runtime implementation remains planned).
+- Hunt Memory runtime features required by the pilot: Run Ledger and Honest Counters runtime is implemented and supplied by the normal browser entry; deliberate Schema 3.0 cutover is active with separate keys, while retained Schema 2.0 progress remains legacy.
 - One bundled, validated Dark Souls II: Scholar of the First Sin PlayStation Completion Pack for a confirmed edition and game version.
 - Manual area and bonfire selection, Area Sweep, Hint/Route/Exact guidance, and evidence-backed availability reasons.
 - Run-local guide choices and a findable Save For Later list. Saved items can be removed without a separate Undo control; guide navigation and reveals do not replace progress undo.
@@ -159,7 +159,7 @@ The run ledger storage schema, certainty arithmetic rules, and Schema 2.0 to 3.0
 1. **Completion Target Partitioning / DLC Grouping:** How base-game achievements and DLC packs are separated, indexed, and evaluated without violating platform-specific reward definitions.
 2. **Tonight Mode Effort:** Which structured effort ranges, buckets, provenance rules, and estimation behavior can support approximate planning without false precision.
 3. **Bundled Completion Pack Content:** Confirm the exact Dark Souls II release and verify every pilot route, source, and original schematic before the pack is usable. The minimum pack contract is specified in the data contract; game facts are not yet authored.
-4. **Guide State Implementation:** The data contract places run-local route context and Save For Later beside the run ledger, outside progress undo. Schema admission, persistence, and UI remain to be implemented.
-5. **Schema 3.0 Cutover Implementation:** The data contract selects separate V2/V3 keys and one cutover record. Recovery, old-tab divergence warnings, locked saves, export, and browser evidence remain to be implemented and tested before activation.
+4. **Guide State Implementation:** The data contract places run-local route context and Save For Later beside the run ledger, outside progress undo. Schema admission is implemented in types and schema; persistence and UI remain to be implemented.
+5. **Schema 3.0 Cutover Implementation:** The data contract selects separate V2/V3 keys and one cutover record. Local runtime cutover, locked saves, and raw export are implemented and wired in the candidate entry, while multi-tab browser evidence and activation testing remain to be completed.
 6. **Schematic Map Representation:** The smallest accessible data and rendering format that supports original per-area diagrams, stable marker IDs, text equivalents, and measured bundle limits.
 7. **Completion Pack Trust:** Which validation, provenance, integrity, trust, and verification mechanisms safely handle future untrusted local files.

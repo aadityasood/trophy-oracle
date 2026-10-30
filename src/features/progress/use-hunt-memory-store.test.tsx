@@ -252,6 +252,55 @@ describe('useHuntMemoryStore', () => {
   });
 
   it.each([
+    ['fresh', 'throw'],
+    ['fresh', 'swallow'],
+    ['upgrade', 'throw'],
+    ['upgrade', 'swallow'],
+  ] as const)('requires recovery after %s cutover record write %s', async (mode, fault) => {
+    const storage = new MemoryStorage();
+    const rawV2 = mode === 'upgrade' ? ' {"schemaVersion":"2.0","gameProgress":{}} ' : null;
+    if (rawV2 !== null) storage.seed(DEFAULT_PROGRESS_V2_STORAGE_KEY, rawV2);
+    const { result } = renderHook(() => useHuntMemoryStore({
+      storage, lockManager: new TestLockManager(), now: () => MOCK_TIMESTAMP,
+    }));
+    expect(result.current.status).toBe(mode === 'fresh' ? 'fresh' : 'upgrade-required');
+    const confirmed = result.current.store;
+    const before = structuredClone(confirmed);
+    const candidate = createBaseStore();
+    const writes = vi.spyOn(storage, 'setItem').mockImplementation(() => {
+      if (fault === 'throw') throw new Error('Record write fault');
+    });
+    const action = () => mode === 'upgrade' ? result.current.upgrade(MOCK_TIMESTAMP)
+      : result.current.mutate(() => ({ success: true, store: candidate, changed: true }));
+    await act(async () => {
+      expect(await action()).toMatchObject({ status: 'recovery-required', reason: 'RECORD_WRITE_ERROR' });
+    });
+    expect(result.current).toMatchObject({
+      status: 'recovery-required', reason: 'RECORD_WRITE_ERROR', canSave: false, pendingCandidate: null,
+      rawV2, rawV3: null, rawCutover: null, cutoverRecord: null,
+    });
+    expect(result.current.store).toBe(confirmed);
+    expect(confirmed).toEqual(before);
+    const messagePart = fault === 'throw' ? 'Record write fault' : 'record verified absent';
+    expect(result.current).toHaveProperty('message', expect.stringContaining(messagePart));
+    expect(storage.getRawValue(DEFAULT_PROGRESS_V2_STORAGE_KEY)).toBe(rawV2);
+    expect(storage.getRawValue(DEFAULT_PROGRESS_V3_STORAGE_KEY)).toBeNull();
+    expect(storage.getRawValue(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY)).toBeNull();
+    expect(writes).toHaveBeenCalledTimes(1);
+    expect(writes).toHaveBeenCalledWith(DEFAULT_PROGRESS_V3_CUTOVER_STORAGE_KEY, expect.any(String));
+    const reads = storage.readCount;
+    await act(async () => {
+      expect(await result.current.mutate(() => ({ success: true, store: candidate, changed: true })))
+        .toMatchObject({ status: 'blocked', reason: 'INVALID_STATE' });
+      expect(await result.current.upgrade(MOCK_TIMESTAMP)).toMatchObject({ status: 'blocked', reason: 'STATE_MISMATCH' });
+      expect(await result.current.retry()).toMatchObject({ status: 'blocked', reason: 'NO_PENDING_CANDIDATE' });
+    });
+    expect(storage.readCount).toBe(reads);
+    expect(writes).toHaveBeenCalledTimes(1);
+    expect(result.current.store).toBe(confirmed);
+  });
+
+  it.each([
     ['fresh', 'competing-cutover', 'STATE_MISMATCH'],
     ['fresh', 'v2-before-inspection', 'STORAGE_INSPECTION_FAILED'],
     ['upgrade', 'v2-before-inspection', 'STALE_V2_TOKEN'],

@@ -325,6 +325,10 @@ export function useHuntMemoryStore(
         return { status: 'recovery-required', reason: result.reason, message: result.message };
       }
       if (result.status === 'failure') {
+        if (result.code === 'RECORD_WRITE_ERROR') {
+          applyRecovery(result.code, result.message, result);
+          return { status: 'recovery-required', reason: result.code, message: result.message };
+        }
         markStale(`${result.code}: ${result.message}`);
         return { status: 'failure', code: result.code, message: result.message };
       }

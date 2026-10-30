@@ -923,7 +923,7 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     expect(clockStorage.writeCount).toBe(0);
   });
 
-  it('isolates multi-game lifetime across waits, preserving newer drafts on A->B->A, same-set browsing, and disabling submit in view-only', async () => {
+  it('isolates multi-game lifetime across waits, preserving newer drafts on A->B->A and same-set browsing', async () => {
     const user = userEvent.setup();
     const storage = new MemoryStorage();
     const lockManager = new TestLockManager();
@@ -1014,6 +1014,12 @@ describe('HuntMemoryApp Integration and Lifecycle', () => {
     expect(RunProgressSchema.safeParse(createdFreshRun).success).toBe(true);
     unmount();
 
+  });
+
+  it('disables run creation submit in view-only mode without storage writes', async () => {
+    const user = userEvent.setup();
+    const storage = new MemoryStorage();
+    seedReadyStorage(storage);
     const initialWrites = storage.writeCount;
     const { unmount: unmountViewOnly } = render(
       <HuntMemoryApp datasetResult={TEST_DATASET} session={createSession({ storage, lockManager: null })} />,

@@ -116,9 +116,9 @@ type AchievementLabel =
 - Stable achievement IDs must not be reused for unrelated achievements. An ID that reappears in the same set must identify the same logical achievement before quarantined progress can be considered for restoration.
 - Confidence is inclusive `[0, 1]`.
 - `spoilerSafeHint` is required whenever the UI hides that record's exact name, description, warning, or checklist detail by default, and the hint itself must be supported by trusted fields on that record.
-- A `crossPlatformGroupId` links equivalent records for comparison only. Progress, completion, pins, active stage, orphan state, and reconciliation remain independent by achievement-set ID. Undo is game-scoped rather than an independent history per set: each game retains only its most recent set-mutation snapshot, which records one set ID.
+- A `crossPlatformGroupId` links equivalent records for comparison only. Progress, completion, pins, active stage, orphan state, and reconciliation remain independent by achievement-set ID. Undo remains game-scoped: each game retains at most one snapshot targeting its latest run mutation in candidate V3, or its latest set mutation in retained legacy V2.
 
-## Versioned Progress Store (Current Runtime: Schema 2.0)
+## Versioned Progress Store (Legacy Runtime: Schema 2.0)
 
 ```ts
 type ProgressProvenance = "manual" | "imported" | "platform";
@@ -166,7 +166,7 @@ type LocalProgressStore = {
 };
 ```
 
-## Manual Progress Rules (Current Runtime: Schema 2.0)
+## Manual Progress Rules (Legacy Runtime: Schema 2.0)
 
 - **Set Identity**: Map keys must match their embedded `gameId`, `setId`, and `achievementId`. `preferredSetId`, every set-progress key, every pin, and every progress entry must reference the same game and set hierarchy.
 - **Persisted Map Keys**: Map keys in `gameProgress`, `undoState`, `sets`, `orphanedProgress`, `progress`, and `checklistCompletion` may be any nonblank string except the exact reserved string `__proto__`. Schema 2.0 validation rejects a store containing a reserved map key with a typed issue at that map's path instead of silently dropping it. All other nonblank strings, including `constructor` and `toString`, remain valid keys, and relationship checks use own-property semantics.
@@ -179,7 +179,7 @@ type LocalProgressStore = {
 - **Pins**: Each set may pin at most 5 distinct achievement IDs from that same set. Switching sets changes which set's pins are shown; it never clears or copies another set's pins.
 - **Completion Isolation**: Completion fractions use only current, non-orphan achievement records in one set. They never combine equivalent records or progress from another platform or edition.
 
-## Dataset Reconciliation Rules (Current Runtime: Schema 2.0)
+## Dataset Reconciliation Rules (Legacy Runtime: Schema 2.0)
 
 ```ts
 type ChecklistItemDelta = {
@@ -223,9 +223,9 @@ When updating a game's achievement sets:
 9. **Advance versions safely**: After successful reconciliation, update each surviving `AchievementSetProgress.version` to the matching set version. An unsupported `LocalProgressStore.schemaVersion` or other unsafe mismatch produces `schemaConflicts` and must not silently discard or rewrite progress.
 10. **Return the delta**: Return one `ReconciliationDeltaReport` with every affected set, including empty arrays for unchanged set-delta categories so consumers do not infer missing work from absent keys.
 
-## Planned Hunt Memory Progress Store (Schema 3.0)
+## Hunt Memory Progress Store (Candidate Runtime: Schema 3.0)
 
-This planned schema adds run ledgers and honest counter certainty to local persistence. Domain and storage modules exist, but the live application still loads and saves Schema 2.0. The Schema 3.0 cutover and guide state below are not wired into the application.
+This schema adds run ledgers and honest counter certainty to local persistence. The normal browser entry now supplies Schema 3.0 with separate storage keys and exclusive cutover, while retained Schema 2.0 persistence remains legacy. Guide schema admission is defined, but guide UI and untrusted pack import remain unwired.
 
 ```ts
 type CounterProgress =
@@ -316,7 +316,7 @@ type LocalProgressStoreV3 = {
 };
 ```
 
-## Planned Hunt Memory Run Rules (Schema 3.0)
+## Hunt Memory Run Rules (Candidate Runtime: Schema 3.0)
 
 - **Run Identity and Display Label**:
   - `runId` is a nonblank, immutable identifier unique within its parent achievement set. Map keys in `AchievementSetProgressV3.runs` must match their embedded `runId`.
@@ -420,7 +420,7 @@ type BundledCompletionPack = {
 - **Spoilers**: `hint`, `route`, and `exact` are nonblank authored text. `hint` must be verified as safe to show without revealing route or exact details. Route and Exact are deliberate per-card reveals; absence from `revealByRouteCardId` means Hint only. Hidden route text, exact interactions, and marker coordinates are not placed in the unrevealed UI or model context. Changing one card's reveal level never reveals another card.
 - **Compatibility**: A missing pack or incompatible pack version disables interpretation of saved route context without clearing it or touching progress. Saved achievement IDs remain findable and removable. The pack does not infer location, read the running game, scrape guides, or mutate player progress.
 
-## Planned Counter Certainty Rules (Schema 3.0)
+## Counter Certainty Rules (Candidate Runtime: Schema 3.0)
 
 - **Certainty Variants**:
   - Counter tracking uses a discriminated union on `certainty` with four variants:
@@ -455,7 +455,7 @@ type BundledCompletionPack = {
   - Updating a counter value or certainty is one explicit deterministic user action with an ISO-8601 UTC timestamp and one-step undo.
   - The AI or Oracle model may explain certainty states, but it cannot select or mutate them.
 
-## Planned Dataset Reconciliation Rules (Schema 3.0)
+## Dataset Reconciliation Rules (Candidate Runtime: Schema 3.0)
 
 ```ts
 type RunReconciliationDelta = {
@@ -506,7 +506,7 @@ When updating a game's achievement sets under Schema 3.0:
 12. **Repair undo before mutation**: Clear and report an undo snapshot when its set is removed, its guarded version differs from the incoming set version, or reconciliation will mutate its target run (including derived completion repairs). A cleared report names both `setId` and `runId`. Reconciliation never restores an undo snapshot.
 13. **Advance versions and report completely**: Advance a surviving active set to the new set version only after every run reconciles successfully. Return every set delta plus complete retired, restored, retained, preferred-selection, undo, and schema-conflict fields needed for deterministic tests. Order set, run, achievement, checklist-item, and retired-set arrays lexicographically by their stable IDs; order conflicts by the operation sequence above and then by those same IDs.
 
-## Planned Schema 2.0 to 3.0 Migration Contract
+## Schema 2.0 to 3.0 Migration Contract
 
 ```ts
 type MigratedCounterAssumption = {
@@ -604,7 +604,7 @@ type ProgressMigrationResult =
 8. **Post-Transformation Validation**:
    - Validate the entire transformed object against the Schema 3.0 schema before writing to storage.
 9. **Separate-Key Cutover**:
-   - The live Schema 2.0 key remains `trophy-oracle.progress.v2`. The planned active Schema 3.0 key is `trophy-oracle.progress.v3`. One immutable `trophy-oracle.progress.v3-cutover` record contains either `{ recordVersion: 1, source: "migrated-v2", rawV2: string }` with the exact original V2 string or `{ recordVersion: 1, source: "fresh" }` for a new store. There is no separate backup or initialized-marker key. The unwired V3 inspector reads these three keys but does not perform cutover writes or save V3 progress.
+   - The legacy Schema 2.0 key remains `trophy-oracle.progress.v2`. The active Schema 3.0 key for the normal browser entry is `trophy-oracle.progress.v3`. One immutable `trophy-oracle.progress.v3-cutover` record contains either `{ recordVersion: 1, source: "migrated-v2", rawV2: string }` with the exact original V2 string or `{ recordVersion: 1, source: "fresh" }` for a new store. There is no separate backup or initialized-marker key. The read-only V3 storage inspector reads these three keys to evaluate storage state without writing; cutover writes and V3 progress saves are performed by explicit cutover and save operations.
    - Loading alone never writes. A V2-backed upgrade requires an explicit player action after explaining the need to close older tabs and offering export. Under an exclusive Web Lock, recheck key presence, validate V2, transform and validate V3, then re-read the exact V2 bytes before writing. A changed source aborts without writing. Write the cutover record before V3; never replace V2. A fresh store writes the `fresh` record immediately before its first saved V3 mutation. A failed record write prevents the V3 write.
    - The two writes are not an atomic transaction. A record without V3 can mean an interrupted first write or later V3 loss; require explicit recovery and never silently re-migrate or reset. A valid V3 without a valid record is view/export-only until explicit repair. An invalid V3 fails closed. A failed or uncertain write requires read-back where possible and must never expose an unverified candidate as saved. A full site-data clear can remove every key, so local storage alone cannot detect or recover that loss.
    - A successful migration report may contain only nonfatal `warnings`; fatal conflicts cannot accompany `success: true`. Order report arrays lexicographically by game ID, set ID, run ID, and achievement ID. For otherwise identical counter-assumption identities, use location order `active`, `orphan`, then `undo`. The storage adapter needs distinct typed conflict, access, write, capability, and recovery results; the pure V2-to-V3 transformation does not by itself prove persistence.

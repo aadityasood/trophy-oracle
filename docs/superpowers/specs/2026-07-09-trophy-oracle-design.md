@@ -6,7 +6,7 @@ Trophy Oracle is a local-first, spoiler-aware completion cockpit for video game 
 
 Standard platform trackers show unlocked achievements, but they discard active playthrough context. They do not know if a player is on a fresh run or in post-game cleanup, which counters are uncertain, or whether a point of no return is approaching. Trophy Oracle addresses this gap with Hunt Memory: a local state system designed for the active completion run.
 
-The current application is a deterministic foundation using bundled fictional demo data. Hunt Memory, grounded retrieval, local inference, citation checks, evaluation views, and AI Lab are planned. This document labels planned interactions instead of presenting them as working behavior.
+The current application is a deterministic foundation using bundled fictional demo data. Hunt Memory V3 local runtime (Run Ledger, Honest Counters, and separate-key cutover) is implemented in the normal browser entry, while Resume Capsule, Safety Gate advisory checks, guide UI, and local inference remain planned. This document labels planned interactions instead of presenting them as working behavior.
 
 ## Current Working Baseline
 
@@ -17,11 +17,11 @@ The existing application provides a functional, deterministic foundation built o
 - Game-specific accent colors and dark theme styling.
 - Three-stage roadmap: Story, Missables, Grind/Cleanup, with dynamic header labeling ("Platinum Roadmap" on PlayStation, "100% Roadmap" elsewhere).
 - Set-local progress engine supporting binary checkmarks, bounded/open counters, and checklists.
-- Browser-local persistence with one game-scoped undo snapshot for the latest set mutation.
+- Browser-local persistence with at most one game-scoped undo snapshot targeting the latest run mutation in candidate V3, or the latest set mutation in retained legacy V2.
 - Focus Board displaying up to 5 pinned achievements per set with quick controls.
 - Deterministic spoiler-safe Oracle Focus recommendations based on urgency, stage match, partial progress, and canonical order.
 - Spoiler protections that withhold hidden achievement names, conditions, and warnings until explicitly revealed.
-- Read-only protection for unsupported saved-data versions and session-only behavior when browser storage is unavailable.
+- Read-only protection for unsupported saved-data versions and view-only behavior in candidate V3 when browser storage or Web Locks are unavailable.
 
 ## Current Interaction Contract
 
@@ -47,9 +47,9 @@ The main screen follows a stable reading order: product header and search, game 
 
 ### Undo And Isolation
 
-- Each game has one undo snapshot for its latest set mutation. A later mutation in another set of the same game replaces the older snapshot.
-- The undo control names the platform or edition set that will be restored before the player activates it.
-- Undo restores exactly that set's prior version, pins, stage, progress, provenance, notes, and timestamps, then clears the snapshot.
+- In candidate Hunt Memory V3, each game has one undo snapshot targeting its latest run mutation; undo restores only that target run's previous state without altering current selection or other runs. In retained legacy V2, undo restores the latest set mutation.
+- In candidate V3, the undo control names the recorded run that will be restored before activation; in legacy V2, it names the platform or edition set.
+- Undo restores exactly that target run's prior state in candidate V3 (or that set's prior version, pins, stage, progress, provenance, notes, and timestamps in legacy V2), then clears the snapshot.
 - Switching sets without a mutation does not create or clear undo.
 - An unavailable or version-mismatched target disables undo and explains why.
 - Progress, pins, active stage, orphaned state, and totals remain isolated by achievement-set ID. Cross-platform equivalence never acts as a progress key.
@@ -64,7 +64,7 @@ The main screen follows a stable reading order: product header and search, game 
 
 ## Signature Feature Family: Hunt Memory
 
-Hunt Memory will expand the local state engine beyond simple checklist ticking. It adds structured context for active completion runs (planned for future phases).
+Hunt Memory expands the local state engine beyond simple checklist ticking. It adds structured context for active completion runs (Run Ledger and Honest Counters are implemented in the candidate V3 runtime, while Resume Capsule, Safety Gate, and Tonight Mode remain planned for future phases).
 
 ### 1. Run Ledger
 - Allows players to create and switch between named playthrough contexts (such as "Blind Playthrough", "Cleanup Run", or "NG+ Speedrun").
@@ -163,7 +163,7 @@ V1 includes one bundled, validated Dark Souls II pilot pack containing game meta
 ## Status, Loading, And Failure Behavior
 
 - Trusted demo data failure replaces the application with a clear alert. The interface must not continue with partially trusted records.
-- Unavailable browser storage starts session-only mode and explains that progress will not be saved.
+- Unavailable browser storage or Web Locks starts view-only mode and explains that progress cannot be saved in persistent storage.
 - Invalid saved progress stays untouched. A safe session fallback must not overwrite unreadable stored bytes.
 - A saved set with a different data version remains visible but read-only until a supported reconciliation path exists.
 - Missing set or achievement progress produces a non-destructive unavailable state.
@@ -228,6 +228,6 @@ The run ledger storage schema, certainty arithmetic rules, and Schema 2.0 to 3.0
 2. **Tonight Mode Effort:** Structured effort ranges, buckets, provenance rules, and estimation behavior that support approximate plans without false precision.
 3. **Bundled Completion Pack Contract:** Exact release identity, evidence, location, route, availability, spoiler, and marker fields for the trusted pilot pack.
 4. **Guide State Ownership:** Run-local persistence and undo behavior for active area, checkpoint, reveal level, and Save For Later state before Schema 3.0 activation.
-5. **Schema 3.0 Cutover Recovery:** Backup, rollback, and stale-tab behavior before replacing the existing local progress value.
+5. **Schema 3.0 Cutover Recovery:** Schema 3.0 cutover with separate keys, recovery states, and raw backup export is implemented in the local runtime, while validated restore remains planned.
 6. **Schematic Map Representation:** An accessible per-area data and rendering format with stable markers, text equivalents, and measured bundle limits.
 7. **Completion Pack Trust:** Validation, provenance, integrity, trust, and verification rules for future untrusted local files.

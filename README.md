@@ -2,7 +2,7 @@
 
 Trophy Oracle is a local-first, spoiler-aware completion cockpit. It keeps achievement progress, roadmap state, pins, notes, and spoiler choices private in the browser.
 
-The working application is a deterministic foundation built on fictional demo data. Hunt Memory is the planned signature feature family for named runs, honest counters, parked-session summaries, and point-of-no-return checks. V1 will prove the product during a real Dark Souls II platinum run with achievement-focused area sweeps, route guidance, and original schematic maps. Grounded local questions and answers are a later phase.
+The working application is a deterministic foundation built on fictional demo data. Hunt Memory V3 is the signature state engine providing named runs, honest counters, and separate-key persistence for the normal browser entry. V1 will prove the product during a real Dark Souls II platinum run with achievement-focused area sweeps, route guidance, and original schematic maps. Grounded local questions and answers are a later phase.
 
 ## What Works Today
 
@@ -13,16 +13,17 @@ The current codebase is a functional foundation using bundled fictional demo gam
 - Automatically format dynamic headers: `Platinum Roadmap` on PlayStation and `100% Roadmap` elsewhere.
 - Apply game-specific accent colors to the interface.
 - Validate all bundled data through a strict Zod data gate.
-- Track progress in browser storage with one game-scoped undo snapshot for the latest set mutation.
+- Track progress in browser storage using Hunt Memory V3 persistence for the normal browser entry, featuring Run Ledger for named playthroughs, Honest Counter certainty, separate storage keys, and raw export backup options.
+- Retain the legacy progress engine for direct callers that do not supply an active Hunt Memory session.
 - Manage a set-local Focus Board with up to 5 pinned achievements and quick controls (binary checks, counters, checklists).
 - Organize work across a three-stage roadmap (Story, Missables, Grind/Cleanup) with persisted active stage.
 - View deterministic, spoiler-safe Oracle Focus recommendations based on urgency, stage match, partial progress, and canonical order.
 - Protect against spoilers by masking hidden achievement names, conditions, and warnings until revealed.
-- Keep unsupported saved-data versions read-only and use session-only progress when browser storage is unavailable.
+- Keep unsupported saved-data versions read-only and disable persistent writes safely when browser storage or Web Locks are unavailable.
 
 ## Planned Direction
 
-- **Hunt Memory V1:** Run Ledger and Honest Counters keep progress separate between named playthroughs without false precision.
+- **Hunt Memory Follow-ups:** Parked-session summaries and point-of-no-return checks continue the Hunt Memory foundation.
 - **Resume Capsule and Safety Gate:** Planned follow-ups for returning to a parked run and checking authored point-of-no-return risks. The V1 pilot still shows trusted missable warnings directly.
 - **Tonight Mode:** Approximate plans using 20, 45, or 90 minute presets and Chill, Grind, or Challenge preferences. Scheduling waits for structured, evidence-backed effort data.
 - **Completion Targets:** Platform-appropriate Platinum, base-game 100%, or all-content scope without changing official rewards.
@@ -92,6 +93,14 @@ npm run build
 - Vitest and Testing Library
 - Browser-local progress persistence
 - Local inference in a later phase
+
+## Storage and Backup Limitations
+
+Trophy Oracle operates entirely local to the browser:
+
+- Progress is stored in browser-local storage and is subject to browser storage limits, eviction, and private browsing restrictions.
+- Raw export options allow downloading current V3 progress, cutover records, and legacy backups as JSON files. Validated restore from uploaded files is planned for a future milestone and is not implemented today.
+- When browser storage or the Web Locks API is unavailable, the application operates in a view-only mode to prevent data corruption.
 
 ## Source Of Truth
 
